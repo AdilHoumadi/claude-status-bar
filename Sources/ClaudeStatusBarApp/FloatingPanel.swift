@@ -82,6 +82,8 @@ struct MiniTrafficLight: View {
 /// The floating panel's content: up to five traffic-lights worst-first, then a +N chip.
 struct FloatingLightsView: View {
     @ObservedObject var model: AppModel
+    // Shared with the Settings slider; updates the glass live as it's dragged.
+    @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
 
     var body: some View {
         let selection = FloatingSelection.select(model.sessions, max: 5)
@@ -124,7 +126,7 @@ struct FloatingLightsView: View {
         .background {
             ZStack {
                 VisualEffectView()
-                Color.black.opacity(0.28)   // deepen toward dark glass
+                Color.black.opacity(panelOpacity * 0.7)   // user-controlled glass depth
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 13))

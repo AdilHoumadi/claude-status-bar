@@ -153,6 +153,7 @@ struct SettingsView: View {
     @AppStorage("notifyOnGreen") private var notifyOnGreen = true
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("mutedProjects") private var mutedProjects = ""
+    @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
     @State private var hookStatus = ""
     @State private var startAtLogin = SMAppService.mainApp.status == .enabled
 
@@ -168,6 +169,22 @@ struct SettingsView: View {
                             startAtLogin = !on  // revert if the system refused
                         }
                     }
+            }
+            Section("Floating panel") {
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text("Background opacity")
+                        Spacer()
+                        Text("\(Int(panelOpacity * 100))%")
+                            .foregroundStyle(.secondary)
+                            .font(.system(.body, design: .monospaced))
+                    }
+                    HStack(spacing: 8) {
+                        Text("Clear").font(.caption).foregroundStyle(.secondary)
+                        Slider(value: $panelOpacity, in: 0...1)
+                        Text("Solid").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
             }
             Section("Notifications") {
                 Toggle("Notify when waiting for me (red)", isOn: $notifyOnRed)
