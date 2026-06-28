@@ -253,55 +253,60 @@ struct SettingsView: View {
                         }
                     }
             }
-            Section("Floating panel") {
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack {
-                        Text("Background opacity")
-                        Spacer()
-                        Text("\(Int(panelOpacity * 100))%")
-                            .foregroundStyle(.secondary)
-                            .font(.system(.body, design: .monospaced))
-                    }
-                    HStack(spacing: 8) {
-                        Text("Clear").font(.caption).foregroundStyle(.secondary)
-                        Slider(value: $panelOpacity, in: 0...1)
-                        Text("Solid").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            }
+
             Section("Notifications") {
                 Toggle("Enable notifications", isOn: $notificationsEnabled)
-                Group {
-                    Toggle("Waiting for me (red)", isOn: $notifyOnRed)
-                    Toggle("Running (yellow)", isOn: $notifyOnYellow)
-                    Toggle("Finished (green)", isOn: $notifyOnGreen)
-                }
-                .disabled(!notificationsEnabled)
-                .padding(.leading, 12)
+                Toggle("Waiting for me (red)", isOn: $notifyOnRed).disabled(!notificationsEnabled)
+                Toggle("Running (yellow)", isOn: $notifyOnYellow).disabled(!notificationsEnabled)
+                Toggle("Finished (green)", isOn: $notifyOnGreen).disabled(!notificationsEnabled)
             }
+
             Section("Sound") {
                 Toggle("Enable sound", isOn: $soundEnabled)
-                Toggle("Completion sound", isOn: $completionSound)
-                    .disabled(!soundEnabled)
-                    .padding(.leading, 12)
+                Toggle("Completion sound", isOn: $completionSound).disabled(!soundEnabled)
             }
-            Section("Muted projects (one cwd per line)") {
-                TextEditor(text: $mutedProjects).frame(height: 100)
+
+            Section("Floating panel") {
+                LabeledContent("Background opacity") {
+                    HStack(spacing: 8) {
+                        Slider(value: $panelOpacity, in: 0...1).frame(width: 150)
+                        Text("\(Int(panelOpacity * 100))%")
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .frame(width: 38, alignment: .trailing)
+                    }
+                }
             }
-            Section("Claude Code hooks") {
+
+            Section {
+                TextEditor(text: $mutedProjects)
+                    .font(.system(.callout, design: .monospaced))
+                    .frame(height: 72)
+                    .padding(4)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
+            } header: {
+                Text("Muted projects")
+            } footer: {
+                Text("One project path (cwd) per line — muted projects never notify.")
+            }
+
+            Section {
                 HStack {
                     Button("Install hooks") { runInstall() }
                     Button("Uninstall hooks") { runUninstall() }
+                    Spacer()
+                    if !hookStatus.isEmpty {
+                        Text(hookStatus).font(.callout).foregroundStyle(.secondary)
+                    }
                 }
-                if !hookStatus.isEmpty {
-                    Text(hookStatus).font(.caption).foregroundStyle(.secondary)
-                }
-                Text("Writes status hooks into ~/.claude/settings.json (backed up to settings.json.bak first).")
-                    .font(.caption).foregroundStyle(.secondary)
+            } header: {
+                Text("Claude Code hooks")
+            } footer: {
+                Text("Writes status hooks into ~/.claude/settings.json (backed up to settings.json.bak first). Your existing hooks are preserved.")
             }
         }
-        .padding(20)
-        .frame(width: 440, height: 420)
+        .formStyle(.grouped)
+        .frame(width: 460, height: 600)
     }
 
     private func runInstall() {
