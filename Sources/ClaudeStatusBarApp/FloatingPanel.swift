@@ -126,9 +126,9 @@ struct FloatingLightsView: View {
                 }
             }
         }
+        .fixedSize()   // size to full natural content so the header never truncates
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
-        .frame(minWidth: 100)
         .background {
             ZStack {
                 VisualEffectView()
@@ -142,16 +142,18 @@ struct FloatingLightsView: View {
 }
 
 /// Owns the borderless, always-on-top, draggable panel and toggles its visibility.
+/// The window size tracks the SwiftUI content (so it stays snug for 1–3 lights); only
+/// the drag position is persisted.
 @MainActor
-final class FloatingPanelController {
+final class FloatingPanelController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
 
     func show(model: AppModel) {
         if panel == nil {
             let hosting = NSHostingView(rootView: FloatingLightsView(model: model))
-            hosting.sizingOptions = [.standardBounds]
+            hosting.sizingOptions = [.preferredContentSize]   // window follows content size
             let p = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 360, height: 120),
+                contentRect: NSRect(x: 0, y: 0, width: 120, height: 100),
                 styleMask: [.nonactivatingPanel, .borderless],
                 backing: .buffered, defer: false
             )
@@ -162,14 +164,49 @@ final class FloatingPanelController {
             p.isMovableByWindowBackground = true
             p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             p.contentView = hosting
-            p.setFrameAutosaveName("ClaudeStatusBarFloating")
-            if p.frame.origin == .zero { p.center() }
+            p.delegate = self
             panel = p
+            reposition(p)
         }
         panel?.orderFrontRegardless()
     }
 
     func hide() {
         panel?.orderOut(nil)
+    }
+
+    // Anchor by the TOP-RIGHT corner so the panel grows left/down from a fixed point and
+    // never runs off the edge; persist that corner so drags stick.
+    private var repositioning = false
+
+    func windowDidMove(_ notification: Notification) {
+        guard !repositioning, let w = notification.object as? NSWindow else { return }
+        UserDefaults.standard.set(["x": w.frame.maxX, "y": w.frame.maxY], forKey: "floatingAnchor")
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard let w = notification.object as? NSWindow else { return }
+        reposition(w)
+    }
+
+    private func anchor(for window: NSWindow) -> NSPoint {
+        if let a = UserDefaults.standard.dictionary(forKey: "floatingAnchor"),
+           let x = a["x"] as? Double, let y = a["y"] as? Double {
+            return NSPoint(x: x, y: y)
+        }
+        let vf = (window.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+        return NSPoint(x: vf.maxX - 14, y: vf.maxY - 8)   // default: top-right
+    }
+
+    private func reposition(_ window: NSWindow) {
+        let a = anchor(for: window)
+        var origin = NSPoint(x: a.x - window.frame.width, y: a.y - window.frame.height)
+        if let vf = (window.screen ?? NSScreen.main)?.visibleFrame {
+            origin.x = min(max(origin.x, vf.minX), vf.maxX - window.frame.width)
+            origin.y = min(max(origin.y, vf.minY), vf.maxY - window.frame.height)
+        }
+        repositioning = true
+        window.setFrameOrigin(origin)
+        repositioning = false
     }
 }

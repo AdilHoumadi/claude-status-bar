@@ -49,6 +49,14 @@ func notificationCoordinatorTests() -> TestSuite { ("NotificationCoordinatorTest
     out = cm.process(sessions: [item("m", .red)], settings: muted, now: at(1))
     t.expectEqual(out.count, 0)
 
+    // notify on running (yellow) when enabled -> .started
+    let cy = NotificationCoordinator()
+    let allStates = NotificationSettings(notifyStates: [.red, .yellow, .green])
+    _ = cy.process(sessions: [item("y", .green)], settings: allStates, now: at(0))
+    out = cy.process(sessions: [item("y", .yellow)], settings: allStates, now: at(1))
+    t.expectEqual(out.count, 1)
+    t.expectEqual(out.first?.kind, .started)
+
     // disabled transition: notify only on red -> a ->green is silent, ->red fires
     let cd = NotificationCoordinator()
     let redOnly = NotificationSettings(notifyStates: [.red])

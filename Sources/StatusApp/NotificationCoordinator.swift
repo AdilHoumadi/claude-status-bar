@@ -5,6 +5,7 @@ import StatusCore
 public struct AppNotification: Equatable, Sendable {
     public enum Kind: Equatable, Sendable {
         case needsYou   // entered red
+        case started    // entered yellow (running)
         case done       // entered green
     }
     public let kind: Kind
@@ -76,8 +77,8 @@ public final class NotificationCoordinator {
     private func kind(for state: SessionState) -> AppNotification.Kind? {
         switch state {
         case .red: return .needsYou
+        case .yellow: return .started
         case .green: return .done
-        case .yellow: return nil
         }
     }
 }

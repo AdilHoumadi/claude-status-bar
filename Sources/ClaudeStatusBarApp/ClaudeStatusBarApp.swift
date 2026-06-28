@@ -88,13 +88,17 @@ func formatElapsed(_ t: TimeInterval) -> String {
 /// sound on). The Settings UI writes the same keys via `@AppStorage`.
 func currentNotificationSettings() -> NotificationSettings {
     let d = UserDefaults.standard
-    let notifyRed = d.object(forKey: "notifyOnRed") as? Bool ?? true
-    let notifyGreen = d.object(forKey: "notifyOnGreen") as? Bool ?? true
-    let sound = d.object(forKey: "soundEnabled") as? Bool ?? true
+    func flag(_ key: String, _ def: Bool) -> Bool { d.object(forKey: key) as? Bool ?? def }
+    let notifyRed = flag("notifyOnRed", true)
+    let notifyYellow = flag("notifyOnYellow", false)
+    let notifyGreen = flag("notifyOnGreen", true)
+    let completion = flag("completionSound", true)
+    let sound = flag("soundEnabled", true)
     let mutedCSV = d.string(forKey: "mutedProjects") ?? ""
     var states = Set<SessionState>()
     if notifyRed { states.insert(.red) }
-    if notifyGreen { states.insert(.green) }
+    if notifyYellow { states.insert(.yellow) }
+    if notifyGreen || completion { states.insert(.green) }  // detect green for banner and/or chime
     let muted = Set(mutedCSV.split(separator: "\n").map(String.init).filter { !$0.isEmpty })
     return NotificationSettings(notifyStates: states, soundEnabled: sound, mutedProjects: muted)
 }
@@ -120,6 +124,9 @@ final class UserNotifier: Notifier {
         case .needsYou:
             content.title = "Claude Code needs you"
             content.body = "\(notification.projectName) is waiting for your input"
+        case .started:
+            content.title = "Claude Code is working"
+            content.body = "\(notification.projectName) started"
         case .done:
             content.title = "Claude Code finished"
             content.body = "\(notification.projectName) is idle"
@@ -163,9 +170,25 @@ final class AppModel: ObservableObject {
         sessions = vm.sessions
 
         let settings = currentNotificationSettings()
+        let d = UserDefaults.standard
+        let bannerGreen = d.object(forKey: "notifyOnGreen") as? Bool ?? true
+        let completion = d.object(forKey: "completionSound") as? Bool ?? true
+
         for note in coordinator.process(sessions: vm.sessions, settings: settings, now: Date()) {
-            notifier.post(note, sound: settings.soundEnabled)
+            switch note.kind {
+            case .needsYou, .started:
+                notifier.post(note, sound: settings.soundEnabled)
+            case .done:
+                // Completion chime is independent of the banner so you can have a sound
+                // without a popup (or both).
+                if completion { playCompletionSound() }
+                if bannerGreen { notifier.post(note, sound: settings.soundEnabled && !completion) }
+            }
         }
+    }
+
+    private func playCompletionSound() {
+        (NSSound(named: "Glass") ?? NSSound(named: "Hero"))?.play()
     }
 }
 
@@ -203,8 +226,10 @@ func helperSourceURL() -> URL {
 
 struct SettingsView: View {
     @AppStorage("notifyOnRed") private var notifyOnRed = true
+    @AppStorage("notifyOnYellow") private var notifyOnYellow = false
     @AppStorage("notifyOnGreen") private var notifyOnGreen = true
     @AppStorage("soundEnabled") private var soundEnabled = true
+    @AppStorage("completionSound") private var completionSound = true
     @AppStorage("mutedProjects") private var mutedProjects = ""
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
     @State private var hookStatus = ""
@@ -240,9 +265,11 @@ struct SettingsView: View {
                 }
             }
             Section("Notifications") {
-                Toggle("Notify when waiting for me (red)", isOn: $notifyOnRed)
-                Toggle("Notify when finished (green)", isOn: $notifyOnGreen)
-                Toggle("Play sound", isOn: $soundEnabled)
+                Toggle("Waiting for me (red)", isOn: $notifyOnRed)
+                Toggle("Running (yellow)", isOn: $notifyOnYellow)
+                Toggle("Finished (green)", isOn: $notifyOnGreen)
+                Toggle("Play sound with notifications", isOn: $soundEnabled)
+                Toggle("Completion sound", isOn: $completionSound)
             }
             Section("Muted projects (one cwd per line)") {
                 TextEditor(text: $mutedProjects).frame(height: 100)
