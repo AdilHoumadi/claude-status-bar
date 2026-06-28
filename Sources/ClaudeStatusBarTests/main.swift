@@ -8,4 +8,6 @@ runSuites([
     hookProcessorTests(),
     statusViewModelTests(),
     notificationCoordinatorTests(),
+    settingsJsonMergeTests(),
+    hookInstallerTests(),
 ])

@@ -3,6 +3,7 @@ import UserNotifications
 import StatusApp
 import StatusCore
 import StatusStore
+import StatusInstall
 
 extension SessionState {
     var emoji: String {
@@ -123,11 +124,19 @@ struct ClaudeStatusBarApp: App {
     }
 }
 
+/// The helper binary sits next to the app executable (same dir in `.build` and inside a
+/// bundle's Contents/MacOS), so this resolves correctly in both.
+func helperSourceURL() -> URL {
+    let executable = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
+    return executable.deletingLastPathComponent().appendingPathComponent("claude-statusbar-hook")
+}
+
 struct SettingsView: View {
     @AppStorage("notifyOnRed") private var notifyOnRed = true
     @AppStorage("notifyOnGreen") private var notifyOnGreen = true
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("mutedProjects") private var mutedProjects = ""
+    @State private var hookStatus = ""
 
     var body: some View {
         Form {
@@ -139,9 +148,38 @@ struct SettingsView: View {
             Section("Muted projects (one cwd per line)") {
                 TextEditor(text: $mutedProjects).frame(height: 100)
             }
+            Section("Claude Code hooks") {
+                HStack {
+                    Button("Install hooks") { runInstall() }
+                    Button("Uninstall hooks") { runUninstall() }
+                }
+                if !hookStatus.isEmpty {
+                    Text(hookStatus).font(.caption).foregroundStyle(.secondary)
+                }
+                Text("Writes status hooks into ~/.claude/settings.json (backed up to settings.json.bak first).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .padding(20)
-        .frame(width: 440, height: 340)
+        .frame(width: 440, height: 420)
+    }
+
+    private func runInstall() {
+        do {
+            try HookInstaller.defaultInstaller(helperSource: helperSourceURL()).install()
+            hookStatus = "Hooks installed."
+        } catch {
+            hookStatus = "Install failed: \(error)"
+        }
+    }
+
+    private func runUninstall() {
+        do {
+            try HookInstaller.defaultInstaller(helperSource: helperSourceURL()).uninstall()
+            hookStatus = "Hooks removed."
+        } catch {
+            hookStatus = "Uninstall failed: \(error)"
+        }
     }
 }
 
