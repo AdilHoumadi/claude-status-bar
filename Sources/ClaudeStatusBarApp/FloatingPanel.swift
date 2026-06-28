@@ -126,17 +126,18 @@ struct FloatingLightsView: View {
                 }
             }
         }
-        .fixedSize()   // size to full natural content so the header never truncates
-        .padding(.horizontal, 10)
-        .padding(.vertical, 10)
+        // Fixed width sized for 3 lights + the overflow chip; stays this size for fewer.
+        .frame(width: 178, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
         .background {
             ZStack {
                 VisualEffectView()
                 Color.black.opacity(panelOpacity * 0.7)   // user-controlled glass depth
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 13))
-        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 1))
         .environment(\.colorScheme, .dark)   // consistent dark panel, light text & glowing lamps
     }
 }
@@ -151,9 +152,10 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     func show(model: AppModel) {
         if panel == nil {
             let hosting = NSHostingView(rootView: FloatingLightsView(model: model))
-            hosting.sizingOptions = [.preferredContentSize]   // window follows content size
+            // Fixed window sized for 3 lights + chip (matches the content frame). No dynamic
+            // resizing — keeps it stable, rounded, and never clips the content.
             let p = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 120, height: 100),
+                contentRect: NSRect(x: 0, y: 0, width: 202, height: 120),
                 styleMask: [.nonactivatingPanel, .borderless],
                 backing: .buffered, defer: false
             )
