@@ -153,6 +153,7 @@ final class AppModel: ObservableObject {
     private let coordinator = NotificationCoordinator()
     private let notifier: Notifier = UserNotifier()
     private let floating = FloatingPanelController()
+    private let settings = SettingsWindowController()
     private var timer: Timer?
 
     init() {
@@ -165,6 +166,8 @@ final class AppModel: ObservableObject {
         }
         if showFloating { floating.show(model: self) }
     }
+
+    func showSettings() { settings.show() }
 
     func refresh() {
         vm.refresh()
@@ -216,10 +219,6 @@ struct ClaudeStatusBarApp: App {
             Image(nsImage: menuBarIcon(for: model.aggregate))
         }
         .menuBarExtraStyle(.window)
-
-        Settings {
-            SettingsView()
-        }
     }
 }
 
@@ -330,6 +329,35 @@ struct SettingsView: View {
     }
 }
 
+/// A normal AppKit window hosting the SwiftUI SettingsView. Created and shown directly
+/// (not via the SwiftUI Settings scene, which is unreliable to open from a menu-bar agent).
+@MainActor
+final class SettingsWindowController: NSObject, NSWindowDelegate {
+    private var window: NSWindow?
+
+    func show() {
+        if window == nil {
+            let w = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 460, height: 600),
+                styleMask: [.titled, .closable], backing: .buffered, defer: false
+            )
+            w.title = "Claude Status Bar Settings"
+            w.contentView = NSHostingView(rootView: SettingsView())
+            w.isReleasedWhenClosed = false
+            w.center()
+            w.delegate = self
+            window = w
+        }
+        NSApp.setActivationPolicy(.regular)   // become focusable so the window comes forward
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)  // back to menu-bar agent, no Dock icon
+    }
+}
+
 struct DropdownView: View {
     @ObservedObject var model: AppModel
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
@@ -389,7 +417,7 @@ struct DropdownView: View {
             Divider()
 
             HStack {
-                SettingsLink { Text("Settings…") }
+                Button("Settings…") { model.showSettings() }
                 Spacer()
                 Button("Quit") { NSApplication.shared.terminate(nil) }
             }
