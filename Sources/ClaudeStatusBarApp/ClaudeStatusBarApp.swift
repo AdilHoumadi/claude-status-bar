@@ -133,18 +133,7 @@ final class UserNotifier: Notifier {
         }
         if sound { content.sound = .default }
 
-        // Attach a state-coloured traffic-light logo as the notification's image.
-        let state: SessionState
-        switch notification.kind {
-        case .needsYou: state = .red
-        case .started: state = .yellow
-        case .done: state = .green
-        }
-        if let url = notificationIconURL(for: state),
-           let attachment = try? UNNotificationAttachment(identifier: "logo", url: url, options: nil) {
-            content.attachments = [attachment]
-        }
-
+        // The app icon (traffic light) shows on the banner automatically — no attachment.
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
     }
