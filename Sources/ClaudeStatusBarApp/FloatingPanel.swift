@@ -86,7 +86,7 @@ struct FloatingLightsView: View {
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
 
     var body: some View {
-        let selection = FloatingSelection.select(model.sessions, max: 5)
+        let selection = FloatingSelection.select(model.sessions, max: 3)
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 Text("Claude Code")

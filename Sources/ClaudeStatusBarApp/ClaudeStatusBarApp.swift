@@ -1,10 +1,63 @@
 import SwiftUI
+import AppKit
 import UserNotifications
 import ServiceManagement
 import StatusApp
 import StatusCore
 import StatusStore
 import StatusInstall
+
+private func lampNSColor(_ s: SessionState) -> NSColor {
+    switch s {
+    case .red: return NSColor(srgbRed: 1.0, green: 0.23, blue: 0.19, alpha: 1)
+    case .yellow: return NSColor(srgbRed: 1.0, green: 0.62, blue: 0.04, alpha: 1)
+    case .green: return NSColor(srgbRed: 0.20, green: 0.82, blue: 0.35, alpha: 1)
+    }
+}
+
+/// A traffic-light glyph for the menu bar: a solid housing silhouette (adapts to a light
+/// or dark menu bar) with three cut-out lamps; the `active` lamp is filled in colour.
+/// Non-template so the colour shows.
+func menuBarIcon(for active: SessionState) -> NSImage {
+    let w: CGFloat = 13, h: CGFloat = 18
+    let image = NSImage(size: NSSize(width: w, height: h))
+    image.lockFocus()
+    let ctx = NSGraphicsContext.current!.cgContext
+
+    let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    let foreground = (dark ? NSColor.white : NSColor.black).withAlphaComponent(0.92)
+
+    // Solid housing silhouette.
+    let rect = CGRect(x: 1, y: 0.5, width: w - 2, height: h - 1)
+    let radius = (w - 2) / 2
+    ctx.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+    ctx.setFillColor(foreground.cgColor)
+    ctx.fillPath()
+
+    // Three lamp positions.
+    let d: CGFloat = 4.2
+    let cx = w / 2
+    let pad: CGFloat = 2.4
+    let gap = (h - 2 * pad - 3 * d) / 2
+    var lamps: [(SessionState, CGRect)] = []
+    for (i, s) in [SessionState.red, .yellow, .green].enumerated() {
+        let y = h - pad - CGFloat(i) * (d + gap) - d
+        lamps.append((s, CGRect(x: cx - d / 2, y: y, width: d, height: d)))
+    }
+
+    // Cut the lamps out of the silhouette, then fill the active one in colour.
+    ctx.setBlendMode(.clear)
+    for (_, r) in lamps { ctx.fillEllipse(in: r) }
+    ctx.setBlendMode(.normal)
+    if let r = lamps.first(where: { $0.0 == active })?.1 {
+        ctx.setFillColor(lampNSColor(active).cgColor)
+        ctx.fillEllipse(in: r)
+    }
+
+    image.unlockFocus()
+    image.isTemplate = false
+    return image
+}
 
 extension SessionState {
     var emoji: String {
@@ -131,7 +184,7 @@ struct ClaudeStatusBarApp: App {
         MenuBarExtra {
             DropdownView(model: model)
         } label: {
-            Text(model.aggregate.emoji)
+            Image(nsImage: menuBarIcon(for: model.aggregate))
         }
         .menuBarExtraStyle(.window)
 
