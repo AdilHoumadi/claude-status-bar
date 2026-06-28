@@ -171,18 +171,22 @@ final class AppModel: ObservableObject {
 
         let settings = currentNotificationSettings()
         let d = UserDefaults.standard
-        let bannerGreen = d.object(forKey: "notifyOnGreen") as? Bool ?? true
-        let completion = d.object(forKey: "completionSound") as? Bool ?? true
+        func flag(_ key: String, _ def: Bool) -> Bool { d.object(forKey: key) as? Bool ?? def }
+        let notificationsOn = flag("notificationsEnabled", true)  // master switch
+        let soundOn = flag("soundEnabled", true)                  // master switch
+        let bannerGreen = flag("notifyOnGreen", true)
+        let completion = flag("completionSound", true)
 
+        // Always process (keeps transition tracking in sync); the master switches gate output.
         for note in coordinator.process(sessions: vm.sessions, settings: settings, now: Date()) {
             switch note.kind {
             case .needsYou, .started:
-                notifier.post(note, sound: settings.soundEnabled)
+                if notificationsOn { notifier.post(note, sound: soundOn) }
             case .done:
-                // Completion chime is independent of the banner so you can have a sound
-                // without a popup (or both).
-                if completion { playCompletionSound() }
-                if bannerGreen { notifier.post(note, sound: settings.soundEnabled && !completion) }
+                if soundOn && completion { playCompletionSound() }
+                if notificationsOn && bannerGreen {
+                    notifier.post(note, sound: soundOn && !completion)
+                }
             }
         }
     }
@@ -225,6 +229,7 @@ func helperSourceURL() -> URL {
 }
 
 struct SettingsView: View {
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("notifyOnRed") private var notifyOnRed = true
     @AppStorage("notifyOnYellow") private var notifyOnYellow = false
     @AppStorage("notifyOnGreen") private var notifyOnGreen = true
@@ -265,11 +270,20 @@ struct SettingsView: View {
                 }
             }
             Section("Notifications") {
-                Toggle("Waiting for me (red)", isOn: $notifyOnRed)
-                Toggle("Running (yellow)", isOn: $notifyOnYellow)
-                Toggle("Finished (green)", isOn: $notifyOnGreen)
-                Toggle("Play sound with notifications", isOn: $soundEnabled)
+                Toggle("Enable notifications", isOn: $notificationsEnabled)
+                Group {
+                    Toggle("Waiting for me (red)", isOn: $notifyOnRed)
+                    Toggle("Running (yellow)", isOn: $notifyOnYellow)
+                    Toggle("Finished (green)", isOn: $notifyOnGreen)
+                }
+                .disabled(!notificationsEnabled)
+                .padding(.leading, 12)
+            }
+            Section("Sound") {
+                Toggle("Enable sound", isOn: $soundEnabled)
                 Toggle("Completion sound", isOn: $completionSound)
+                    .disabled(!soundEnabled)
+                    .padding(.leading, 12)
             }
             Section("Muted projects (one cwd per line)") {
                 TextEditor(text: $mutedProjects).frame(height: 100)
@@ -312,6 +326,8 @@ struct SettingsView: View {
 struct DropdownView: View {
     @ObservedObject var model: AppModel
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
+    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
+    @AppStorage("soundEnabled") private var soundEnabled = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -334,6 +350,13 @@ struct DropdownView: View {
                     }
                 }
             }
+            Divider()
+            Toggle("Notifications", isOn: $notificationsEnabled)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+            Toggle("Sound", isOn: $soundEnabled)
+                .toggleStyle(.switch)
+                .controlSize(.small)
             Divider()
             Toggle("Floating lights", isOn: $model.showFloating)
                 .toggleStyle(.switch)
