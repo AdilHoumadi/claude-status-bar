@@ -43,5 +43,11 @@ cat > "${APP}/Contents/Info.plist" <<'PLIST'
 PLIST
 
 plutil -lint "${APP}/Contents/Info.plist" >/dev/null
+
+# Ad-hoc sign so Gatekeeper is satisfied locally and login-item registration works.
+# (Distribution to other Macs needs a Developer ID + notarization — a separate step.)
+codesign --force --deep --sign - "${APP}" >/dev/null 2>&1 \
+  && echo "Signed (ad-hoc)." || echo "Note: ad-hoc signing skipped."
+
 echo "Done: ${APP}"
 echo "Run it with:  open ${APP}"

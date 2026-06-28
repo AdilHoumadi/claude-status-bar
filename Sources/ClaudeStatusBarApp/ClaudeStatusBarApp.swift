@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import ServiceManagement
 import StatusApp
 import StatusCore
 import StatusStore
@@ -153,9 +154,21 @@ struct SettingsView: View {
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("mutedProjects") private var mutedProjects = ""
     @State private var hookStatus = ""
+    @State private var startAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
         Form {
+            Section("General") {
+                Toggle("Start at login", isOn: $startAtLogin)
+                    .onChange(of: startAtLogin) { _, on in
+                        do {
+                            if on { try SMAppService.mainApp.register() }
+                            else { try SMAppService.mainApp.unregister() }
+                        } catch {
+                            startAtLogin = !on  // revert if the system refused
+                        }
+                    }
+            }
             Section("Notifications") {
                 Toggle("Notify when waiting for me (red)", isOn: $notifyOnRed)
                 Toggle("Notify when finished (green)", isOn: $notifyOnGreen)
