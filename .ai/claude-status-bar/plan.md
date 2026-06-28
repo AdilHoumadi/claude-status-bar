@@ -12,6 +12,17 @@ package and contains only views + wiring. This keeps every phase anchored on a r
 behavioral test, since `MenuBarExtra`/Settings UI cannot be unit-tested but mappers,
 stores, view-models, coordinators, and the installer can.
 
+### Environment adaptation (2026-06-28) — Command Line Tools only, no full Xcode
+The build machine has CLT only, so `XCTest`/`Testing` frameworks and `.xcodeproj`
+builds are unavailable; `swift build`/`swift run` work and SwiftUI/AppKit/UserNotifications
+all compile. Two **mechanism** changes (phase logic and ACs unchanged):
+- **Tests** use a tiny dependency-free harness (`TestSupport` lib + a `ClaudeStatusBarTests`
+  executable; run with `swift run ClaudeStatusBarTests`) instead of XCTest. Same assertions,
+  same RED→GREEN discipline. Each phase appends its suite to the runner.
+- **App shell** is a SwiftPM **executable target** using SwiftUI `MenuBarExtra` (built with
+  `swift build`), not an `.xcodeproj`. `.app` bundling for notifications is a final packaging
+  step run on a Mac; the on-screen menu-bar check is done by the user (G2 decision unchanged).
+
 ```
 claude-status-bar/
   Package.swift                         # macOS 14; libs + CLI executable + test targets
