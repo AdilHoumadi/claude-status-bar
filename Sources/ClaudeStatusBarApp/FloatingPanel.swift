@@ -8,7 +8,7 @@ import StatusCore
 struct VisualEffectView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
-        view.material = .popover
+        view.material = .hudWindow   // dark, premium frosted glass
         view.blendingMode = .behindWindow
         view.state = .active
         return view
@@ -31,45 +31,51 @@ private func compactElapsed(_ t: TimeInterval) -> String {
     return "\(s / 3600)h\((s % 3600) / 60)m"
 }
 
-/// A small road traffic-light: three lamps, the current state lit and glowing. The lit
-/// lamp carries the state, so the caption shows the project + elapsed time instead.
+/// A small road traffic-light: three lamps, only the current state lit and glowing.
+/// Off-lamps are neutral dark (recessed) so the cell reads clean; the caption shows the
+/// project name + elapsed time.
 struct MiniTrafficLight: View {
     let session: SessionViewItem
 
+    private var name: String {
+        let n = session.displayName
+        return n.hasPrefix(".") ? String(n.dropFirst()) : n   // ".mnemo" -> "mnemo"
+    }
+
     var body: some View {
-        VStack(spacing: 5) {
-            VStack(spacing: 4) {
+        VStack(spacing: 4) {
+            VStack(spacing: 3) {
                 lamp(.red)
                 lamp(.yellow)
                 lamp(.green)
             }
-            .padding(.vertical, 5)
-            .frame(width: 28)
+            .padding(4)
             .background(
-                LinearGradient(colors: [Color(white: 0.24), Color(white: 0.06)],
-                               startPoint: .top, endPoint: .bottom)
+                LinearGradient(colors: [Color(white: 0.22), Color(white: 0.05)],
+                               startPoint: .top, endPoint: .bottom),
+                in: RoundedRectangle(cornerRadius: 6)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.black.opacity(0.45), lineWidth: 0.5))
+            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.10), lineWidth: 0.5))
 
             VStack(spacing: 0) {
-                Text(session.displayName)
-                    .font(.system(size: 9.5, weight: .medium))
-                    .lineLimit(1).truncationMode(.middle)
+                Text(name)
+                    .font(.system(size: 9, weight: .medium))
+                    .lineLimit(1).truncationMode(.tail)
+                    .foregroundStyle(.primary.opacity(0.92))
                 Text(compactElapsed(session.elapsed))
-                    .font(.system(size: 8.5, weight: .regular, design: .monospaced))
+                    .font(.system(size: 8, weight: .regular, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }
-            .frame(width: 54)
+            .frame(width: 56)
         }
     }
 
     @ViewBuilder private func lamp(_ state: SessionState) -> some View {
         let lit = session.state == state
         Circle()
-            .fill(lit ? lampColor(state) : lampColor(state).opacity(0.14))
+            .fill(lit ? lampColor(state) : Color.white.opacity(0.07))
             .frame(width: 13, height: 13)
-            .shadow(color: lit ? lampColor(state).opacity(0.8) : .clear, radius: 4)
+            .shadow(color: lit ? lampColor(state).opacity(0.95) : .clear, radius: 4.5)
     }
 }
 
@@ -79,48 +85,51 @@ struct FloatingLightsView: View {
 
     var body: some View {
         let selection = FloatingSelection.select(model.sessions, max: 5)
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
-                Text("Claude Code").font(.system(size: 12, weight: .semibold))
+                Text("Claude Code")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                    .kerning(0.4)
                 Spacer()
                 if !model.sessions.isEmpty {
                     Text("\(model.sessions.count)")
-                        .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.secondary)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.tertiary)
                 }
-            }
-            .padding(.bottom, 1)
-            .overlay(alignment: .bottom) {
-                Rectangle().fill(.primary.opacity(0.08)).frame(height: 0.5).offset(y: 5)
             }
 
             if selection.shown.isEmpty {
                 Text("No active sessions")
                     .font(.system(size: 11)).foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 4)
             } else {
-                HStack(alignment: .top, spacing: 6) {
+                HStack(alignment: .top, spacing: 5) {
                     ForEach(selection.shown) { MiniTrafficLight(session: $0) }
                     if selection.overflow > 0 {
                         Text("+\(selection.overflow)")
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
                             .foregroundStyle(.secondary)
-                            .frame(width: 28)
-                            .padding(.vertical, 18)
-                            .background(.primary.opacity(0.05))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .frame(width: 26, height: 44)
+                            .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
                     }
                 }
-                .padding(.top, 2)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
-        .frame(minWidth: 140)
-        .background(VisualEffectView())
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.white.opacity(0.18), lineWidth: 1))
+        .padding(.horizontal, 11)
+        .padding(.vertical, 10)
+        .frame(minWidth: 120)
+        .background {
+            ZStack {
+                VisualEffectView()
+                Color.black.opacity(0.28)   // deepen toward dark glass
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 13))
+        .overlay(RoundedRectangle(cornerRadius: 13).strokeBorder(.white.opacity(0.12), lineWidth: 1))
+        .environment(\.colorScheme, .dark)   // consistent dark panel, light text & glowing lamps
     }
 }
 
