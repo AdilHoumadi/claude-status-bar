@@ -80,18 +80,27 @@ final class UserNotifier: Notifier {
 final class AppModel: ObservableObject {
     @Published var aggregate: SessionState = .green
     @Published var sessions: [SessionViewItem] = []
+    @Published var showFloating: Bool {
+        didSet {
+            UserDefaults.standard.set(showFloating, forKey: "showFloating")
+            showFloating ? floating.show(model: self) : floating.hide()
+        }
+    }
     private let vm: StatusViewModel
     private let coordinator = NotificationCoordinator()
     private let notifier: Notifier = UserNotifier()
+    private let floating = FloatingPanelController()
     private var timer: Timer?
 
     init() {
+        showFloating = UserDefaults.standard.bool(forKey: "showFloating")
         vm = StatusViewModel(store: StateStore(directory: StateStore.defaultDirectory()))
         refresh()
         // Poll-only (G8): one 0.5s timer drives state, notifications, and elapsed display.
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
+        if showFloating { floating.show(model: self) }
     }
 
     func refresh() {
@@ -214,6 +223,10 @@ struct DropdownView: View {
                     }
                 }
             }
+            Divider()
+            Toggle("Floating lights", isOn: $model.showFloating)
+                .toggleStyle(.switch)
+                .controlSize(.small)
             Divider()
             HStack {
                 SettingsLink { Text("Settings…") }

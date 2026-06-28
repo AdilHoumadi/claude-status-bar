@@ -10,4 +10,5 @@ runSuites([
     notificationCoordinatorTests(),
     settingsJsonMergeTests(),
     hookInstallerTests(),
+    floatingSelectionTests(),
 ])
