@@ -66,7 +66,7 @@ struct MiniTrafficLight: View {
                     .font(.system(size: 8, weight: .regular, design: .monospaced))
                     .foregroundStyle(.tertiary)
             }
-            .frame(width: 56)
+            .frame(width: 46)
         }
     }
 
@@ -108,21 +108,27 @@ struct FloatingLightsView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 4)
             } else {
-                HStack(alignment: .top, spacing: 5) {
+                HStack(alignment: .top, spacing: 4) {
                     ForEach(selection.shown) { MiniTrafficLight(session: $0) }
                     if selection.overflow > 0 {
-                        Text("+\(selection.overflow)")
-                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 26, height: 44)
-                            .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 6))
+                        VStack(spacing: 4) {
+                            Text("+\(selection.overflow)")
+                                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                .foregroundStyle(.primary.opacity(0.75))
+                                .frame(width: 26, height: 53)
+                                .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 7))
+                                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
+                            Text("more")
+                                .font(.system(size: 8, weight: .regular, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                        }
                     }
                 }
             }
         }
-        .padding(.horizontal, 11)
+        .padding(.horizontal, 10)
         .padding(.vertical, 10)
-        .frame(minWidth: 120)
+        .frame(minWidth: 100)
         .background {
             ZStack {
                 VisualEffectView()
