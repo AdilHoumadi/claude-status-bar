@@ -12,7 +12,7 @@ let package = Package(
         .target(name: "TestSupport"),
         .executableTarget(
             name: "claude-statusbar-hook",
-            dependencies: ["StatusCore", "StatusStore"]
+            dependencies: ["StatusCore", "StatusStore", "StatusInstall"]
         ),
         .executableTarget(
             name: "ClaudeStatusBarApp",
