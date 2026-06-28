@@ -215,7 +215,11 @@ struct DropdownView: View {
                 }
             }
             Divider()
-            Button("Quit") { NSApplication.shared.terminate(nil) }
+            HStack {
+                SettingsLink { Text("Settings…") }
+                Spacer()
+                Button("Quit") { NSApplication.shared.terminate(nil) }
+            }
         }
         .padding(12)
         .frame(width: 320)
