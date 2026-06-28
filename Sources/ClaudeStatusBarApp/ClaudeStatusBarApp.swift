@@ -1,4 +1,5 @@
 import SwiftUI
+import UserNotifications
 import StatusApp
 import StatusCore
 import StatusStore
@@ -28,17 +29,58 @@ func formatElapsed(_ t: TimeInterval) -> String {
     return "\(s / 3600)h \((s % 3600) / 60)m"
 }
 
+/// Reads notification preferences from UserDefaults (defaults: notify on red + green,
+/// sound on). The Settings UI writes the same keys via `@AppStorage`.
+func currentNotificationSettings() -> NotificationSettings {
+    let d = UserDefaults.standard
+    let notifyRed = d.object(forKey: "notifyOnRed") as? Bool ?? true
+    let notifyGreen = d.object(forKey: "notifyOnGreen") as? Bool ?? true
+    let sound = d.object(forKey: "soundEnabled") as? Bool ?? true
+    let mutedCSV = d.string(forKey: "mutedProjects") ?? ""
+    var states = Set<SessionState>()
+    if notifyRed { states.insert(.red) }
+    if notifyGreen { states.insert(.green) }
+    let muted = Set(mutedCSV.split(separator: "\n").map(String.init).filter { !$0.isEmpty })
+    return NotificationSettings(notifyStates: states, soundEnabled: sound, mutedProjects: muted)
+}
+
+/// Posts desktop notifications via UNUserNotificationCenter. NOTE: this requires the
+/// executable to run as a bundled `.app` (a `UNUserNotificationCenter.current()` call
+/// from a bare binary will fail) — that bundling is the final packaging step.
+final class UserNotifier: Notifier {
+    init() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    func post(_ notification: AppNotification, sound: Bool) {
+        let content = UNMutableNotificationContent()
+        switch notification.kind {
+        case .needsYou:
+            content.title = "Claude Code needs you"
+            content.body = "\(notification.projectName) is waiting for your input"
+        case .done:
+            content.title = "Claude Code finished"
+            content.body = "\(notification.projectName) is idle"
+        }
+        if sound { content.sound = .default }
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
     @Published var aggregate: SessionState = .green
     @Published var sessions: [SessionViewItem] = []
     private let vm: StatusViewModel
+    private let coordinator = NotificationCoordinator()
+    private let notifier: Notifier = UserNotifier()
     private var timer: Timer?
 
     init() {
         vm = StatusViewModel(store: StateStore(directory: StateStore.defaultDirectory()))
         refresh()
-        // Poll-only (G8): one 0.5s timer drives both state and the elapsed display.
+        // Poll-only (G8): one 0.5s timer drives state, notifications, and elapsed display.
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
@@ -48,6 +90,11 @@ final class AppModel: ObservableObject {
         vm.refresh()
         aggregate = vm.aggregate
         sessions = vm.sessions
+
+        let settings = currentNotificationSettings()
+        for note in coordinator.process(sessions: vm.sessions, settings: settings, now: Date()) {
+            notifier.post(note, sound: settings.soundEnabled)
+        }
     }
 }
 
@@ -69,6 +116,32 @@ struct ClaudeStatusBarApp: App {
             Text(model.aggregate.emoji)
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView()
+        }
+    }
+}
+
+struct SettingsView: View {
+    @AppStorage("notifyOnRed") private var notifyOnRed = true
+    @AppStorage("notifyOnGreen") private var notifyOnGreen = true
+    @AppStorage("soundEnabled") private var soundEnabled = true
+    @AppStorage("mutedProjects") private var mutedProjects = ""
+
+    var body: some View {
+        Form {
+            Section("Notifications") {
+                Toggle("Notify when waiting for me (red)", isOn: $notifyOnRed)
+                Toggle("Notify when finished (green)", isOn: $notifyOnGreen)
+                Toggle("Play sound", isOn: $soundEnabled)
+            }
+            Section("Muted projects (one cwd per line)") {
+                TextEditor(text: $mutedProjects).frame(height: 100)
+            }
+        }
+        .padding(20)
+        .frame(width: 440, height: 340)
     }
 }
 

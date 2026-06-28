@@ -7,4 +7,5 @@ runSuites([
     stateStoreTests(),
     hookProcessorTests(),
     statusViewModelTests(),
+    notificationCoordinatorTests(),
 ])
