@@ -4,4 +4,6 @@ import TestSupport
 runSuites([
     stateMapperTests(),
     aggregationTests(),
+    stateStoreTests(),
+    hookProcessorTests(),
 ])
