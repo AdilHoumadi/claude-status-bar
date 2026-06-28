@@ -167,7 +167,7 @@ final class AppModel: ObservableObject {
         if showFloating { floating.show(model: self) }
     }
 
-    func showSettings() { settings.show() }
+    func showSettings() { settings.show(model: self) }
 
     func refresh() {
         vm.refresh()
@@ -230,6 +230,7 @@ func helperSourceURL() -> URL {
 }
 
 struct SettingsView: View {
+    @ObservedObject var model: AppModel
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("notifyOnRed") private var notifyOnRed = true
     @AppStorage("notifyOnYellow") private var notifyOnYellow = false
@@ -268,6 +269,7 @@ struct SettingsView: View {
             }
 
             Section("Floating panel") {
+                Toggle("Show floating lights", isOn: $model.showFloating)
                 LabeledContent("Background opacity") {
                     HStack(spacing: 8) {
                         Slider(value: $panelOpacity, in: 0...1).frame(width: 150)
@@ -277,6 +279,7 @@ struct SettingsView: View {
                             .frame(width: 38, alignment: .trailing)
                     }
                 }
+                .disabled(!model.showFloating)
             }
 
             Section {
@@ -335,14 +338,14 @@ struct SettingsView: View {
 final class SettingsWindowController: NSObject, NSWindowDelegate {
     private var window: NSWindow?
 
-    func show() {
+    func show(model: AppModel) {
         if window == nil {
             let w = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 460, height: 600),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false
             )
             w.title = "Claude Status Bar Settings"
-            w.contentView = NSHostingView(rootView: SettingsView())
+            w.contentView = NSHostingView(rootView: SettingsView(model: model))
             w.isReleasedWhenClosed = false
             w.center()
             w.delegate = self
@@ -350,7 +353,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         }
         NSApp.setActivationPolicy(.regular)   // become focusable so the window comes forward
         NSApp.activate(ignoringOtherApps: true)
+        window?.center()
         window?.makeKeyAndOrderFront(nil)
+        window?.orderFrontRegardless()        // beat the current foreground app
     }
 
     func windowWillClose(_ notification: Notification) {
@@ -360,9 +365,6 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
 struct DropdownView: View {
     @ObservedObject var model: AppModel
-    @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
-    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
-    @AppStorage("soundEnabled") private var soundEnabled = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -396,26 +398,6 @@ struct DropdownView: View {
 
             Divider()
 
-            toggleRow("Notifications", isOn: $notificationsEnabled)
-            toggleRow("Sound", isOn: $soundEnabled)
-
-            Divider()
-
-            toggleRow("Floating lights", isOn: $model.showFloating)
-            if model.showFloating {
-                HStack(spacing: 8) {
-                    Image(systemName: "circle.lefthalf.filled")
-                        .foregroundStyle(.secondary).font(.system(size: 11))
-                    Slider(value: $panelOpacity, in: 0...1).controlSize(.small)
-                    Text("\(Int(panelOpacity * 100))%")
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .frame(width: 34, alignment: .trailing)
-                }
-            }
-
-            Divider()
-
             HStack {
                 Button("Settings…") { model.showSettings() }
                 Spacer()
@@ -424,17 +406,5 @@ struct DropdownView: View {
         }
         .padding(14)
         .frame(width: 300)
-    }
-
-    /// A row with the label on the left and the switch pinned to the right.
-    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
-        HStack {
-            Text(title)
-            Spacer()
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-        }
     }
 }
