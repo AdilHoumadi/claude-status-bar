@@ -399,6 +399,15 @@ struct DropdownView: View {
             Divider()
 
             HStack {
+                Text("Floating lights")
+                Spacer()
+                Toggle("", isOn: $model.showFloating)
+                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
+            }
+
+            Divider()
+
+            HStack {
                 Button("Settings…") { model.showSettings() }
                 Spacer()
                 Button("Quit") { NSApplication.shared.terminate(nil) }
