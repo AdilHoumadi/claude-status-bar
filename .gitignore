@@ -6,3 +6,6 @@ DerivedData/
 
 # built app bundle
 ClaudeStatusBar.app/
+
+# generated iconset (icns is committed)
+assets/AppIcon.iconset/

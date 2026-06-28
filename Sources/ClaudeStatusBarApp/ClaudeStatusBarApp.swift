@@ -231,6 +231,7 @@ struct SettingsView: View {
 
 struct DropdownView: View {
     @ObservedObject var model: AppModel
+    @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -257,6 +258,18 @@ struct DropdownView: View {
             Toggle("Floating lights", isOn: $model.showFloating)
                 .toggleStyle(.switch)
                 .controlSize(.small)
+            if model.showFloating {
+                HStack(spacing: 8) {
+                    Image(systemName: "circle.lefthalf.filled")
+                        .foregroundStyle(.secondary).font(.system(size: 11))
+                    Slider(value: $panelOpacity, in: 0...1)
+                    Text("\(Int(panelOpacity * 100))%")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, alignment: .trailing)
+                }
+                .controlSize(.mini)
+            }
             Divider()
             HStack {
                 SettingsLink { Text("Settings…") }

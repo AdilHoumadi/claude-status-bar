@@ -23,6 +23,13 @@ cp "${BIN}/ClaudeStatusBarApp" "${MACOS}/ClaudeStatusBarApp"
 cp "${BIN}/claude-statusbar-hook" "${MACOS}/claude-statusbar-hook"
 chmod +x "${MACOS}/ClaudeStatusBarApp" "${MACOS}/claude-statusbar-hook"
 
+# App icon (generate if missing).
+if [ ! -f assets/AppIcon.icns ]; then
+  swift scripts/make-icon.swift assets/AppIcon.iconset >/dev/null 2>&1 \
+    && iconutil -c icns assets/AppIcon.iconset -o assets/AppIcon.icns >/dev/null 2>&1 || true
+fi
+[ -f assets/AppIcon.icns ] && cp assets/AppIcon.icns "${APP}/Contents/Resources/AppIcon.icns"
+
 cat > "${APP}/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -32,6 +39,7 @@ cat > "${APP}/Contents/Info.plist" <<'PLIST'
     <key>CFBundleDisplayName</key><string>Claude Status Bar</string>
     <key>CFBundleIdentifier</key><string>com.adil.claudestatusbar</string>
     <key>CFBundleExecutable</key><string>ClaudeStatusBarApp</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>0.1.0</string>
     <key>CFBundleVersion</key><string>1</string>
