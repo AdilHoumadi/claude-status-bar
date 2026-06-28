@@ -3,3 +3,6 @@
 *.xcodeproj/xcuserdata/
 DerivedData/
 .swiftpm/
+
+# built app bundle
+ClaudeStatusBar.app/

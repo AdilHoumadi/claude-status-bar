@@ -45,15 +45,22 @@ func currentNotificationSettings() -> NotificationSettings {
     return NotificationSettings(notifyStates: states, soundEnabled: sound, mutedProjects: muted)
 }
 
-/// Posts desktop notifications via UNUserNotificationCenter. NOTE: this requires the
-/// executable to run as a bundled `.app` (a `UNUserNotificationCenter.current()` call
-/// from a bare binary will fail) — that bundling is the final packaging step.
+/// Posts desktop notifications via UNUserNotificationCenter, which requires a bundled
+/// `.app` (a bare `swift run` binary has no bundle identifier and calling
+/// `UNUserNotificationCenter.current()` would crash). When unbundled we degrade to a
+/// no-op so the menu-bar GUI still runs; build the `.app` (scripts/bundle.sh) for
+/// notifications to fire.
 final class UserNotifier: Notifier {
+    private let enabled: Bool
+
     init() {
+        enabled = Bundle.main.bundleIdentifier != nil
+        guard enabled else { return }
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
 
     func post(_ notification: AppNotification, sound: Bool) {
+        guard enabled else { return }
         let content = UNMutableNotificationContent()
         switch notification.kind {
         case .needsYou:
