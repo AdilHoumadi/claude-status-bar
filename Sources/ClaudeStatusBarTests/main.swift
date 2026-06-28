@@ -6,4 +6,5 @@ runSuites([
     aggregationTests(),
     stateStoreTests(),
     hookProcessorTests(),
+    statusViewModelTests(),
 ])

@@ -7,14 +7,19 @@ let package = Package(
     targets: [
         .target(name: "StatusCore"),
         .target(name: "StatusStore", dependencies: ["StatusCore"]),
+        .target(name: "StatusApp", dependencies: ["StatusCore", "StatusStore"]),
         .target(name: "TestSupport"),
         .executableTarget(
             name: "claude-statusbar-hook",
             dependencies: ["StatusCore", "StatusStore"]
         ),
         .executableTarget(
+            name: "ClaudeStatusBarApp",
+            dependencies: ["StatusApp", "StatusCore", "StatusStore"]
+        ),
+        .executableTarget(
             name: "ClaudeStatusBarTests",
-            dependencies: ["StatusCore", "StatusStore", "TestSupport"]
+            dependencies: ["StatusCore", "StatusStore", "StatusApp", "TestSupport"]
         ),
     ]
 )
