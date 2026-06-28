@@ -335,57 +335,76 @@ struct DropdownView: View {
     @AppStorage("soundEnabled") private var soundEnabled = true
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Claude Code — \(model.aggregate.label)")
                 .font(.headline)
+
             Divider()
+
             if model.sessions.isEmpty {
-                Text("No active sessions").foregroundStyle(.secondary)
+                Text("No active sessions")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                ForEach(model.sessions) { session in
-                    HStack(spacing: 8) {
-                        Text(session.state.emoji)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(session.displayName)
-                            Text(session.cwd ?? "").font(.caption).foregroundStyle(.secondary)
+                VStack(spacing: 9) {
+                    ForEach(model.sessions) { session in
+                        HStack(spacing: 9) {
+                            Text(session.state.emoji).font(.system(size: 12))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(session.displayName).font(.callout).lineLimit(1)
+                                Text(session.cwd ?? "")
+                                    .font(.caption).foregroundStyle(.secondary)
+                                    .lineLimit(1).truncationMode(.middle)
+                            }
+                            Spacer(minLength: 8)
+                            Text(formatElapsed(session.elapsed))
+                                .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                         }
-                        Spacer()
-                        Text(formatElapsed(session.elapsed))
-                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
             }
+
             Divider()
-            Toggle("Notifications", isOn: $notificationsEnabled)
-                .toggleStyle(.switch)
-                .controlSize(.small)
-            Toggle("Sound", isOn: $soundEnabled)
-                .toggleStyle(.switch)
-                .controlSize(.small)
+
+            toggleRow("Notifications", isOn: $notificationsEnabled)
+            toggleRow("Sound", isOn: $soundEnabled)
+
             Divider()
-            Toggle("Floating lights", isOn: $model.showFloating)
-                .toggleStyle(.switch)
-                .controlSize(.small)
+
+            toggleRow("Floating lights", isOn: $model.showFloating)
             if model.showFloating {
                 HStack(spacing: 8) {
                     Image(systemName: "circle.lefthalf.filled")
                         .foregroundStyle(.secondary).font(.system(size: 11))
-                    Slider(value: $panelOpacity, in: 0...1)
+                    Slider(value: $panelOpacity, in: 0...1).controlSize(.small)
                     Text("\(Int(panelOpacity * 100))%")
                         .font(.system(size: 10, design: .monospaced))
                         .foregroundStyle(.secondary)
-                        .frame(width: 32, alignment: .trailing)
+                        .frame(width: 34, alignment: .trailing)
                 }
-                .controlSize(.mini)
             }
+
             Divider()
+
             HStack {
                 SettingsLink { Text("Settings…") }
                 Spacer()
                 Button("Quit") { NSApplication.shared.terminate(nil) }
             }
         }
-        .padding(12)
-        .frame(width: 320)
+        .padding(14)
+        .frame(width: 300)
+    }
+
+    /// A row with the label on the left and the switch pinned to the right.
+    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
     }
 }
