@@ -43,6 +43,29 @@ func stateStoreTests() -> TestSuite { ("StateStoreTests", { t in
     t.expect(store.read("live") != nil, "live session should survive reap")
 }) }
 
+func ignoreListTests() -> TestSuite { ("IgnoreListTests", { t in
+    let prefixes = ["/Users/adil/.mnemo", "/tmp/work/"]
+    // exact + nested paths under an ignored prefix
+    t.expect(IgnoreList.isIgnored("/Users/adil/.mnemo", prefixes: prefixes), "exact match ignored")
+    t.expect(IgnoreList.isIgnored("/Users/adil/.mnemo/server", prefixes: prefixes), "nested path ignored")
+    t.expect(IgnoreList.isIgnored("/tmp/work/x", prefixes: prefixes), "trailing-slash prefix ignored")
+    // not a prefix-boundary match — must not false-positive on sibling dirs
+    t.expect(!IgnoreList.isIgnored("/Users/adil/.mnemo-other", prefixes: prefixes), "sibling not ignored")
+    t.expect(!IgnoreList.isIgnored("/Users/adil/Projects/app", prefixes: prefixes), "unrelated not ignored")
+    t.expect(!IgnoreList.isIgnored(nil, prefixes: prefixes), "nil cwd not ignored")
+    t.expect(!IgnoreList.isIgnored("/Users/adil/.mnemo", prefixes: []), "empty list ignores nothing")
+
+    // reading + tilde expansion from a file
+    let dir = FileManager.default.temporaryDirectory.appendingPathComponent("csb-ign-\(UUID().uuidString)", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let file = dir.appendingPathComponent("ignore.txt")
+    try? Data("~/.mnemo\n\n  /tmp/x  \n".utf8).write(to: file)
+    let read = IgnoreList.prefixes(from: file)
+    t.expectEqual(read.count, 2)
+    t.expect(read.contains("/tmp/x"), "trimmed line parsed")
+    t.expect(read.contains { $0.hasSuffix("/.mnemo") && $0.hasPrefix("/") }, "tilde expanded to absolute")
+}) }
+
 func hookProcessorTests() -> TestSuite { ("HookProcessorTests", { t in
     func ev(_ name: String, notif: String? = nil, session: String = "s1", cwd: String? = "/proj") -> HookEvent {
         HookEvent(sessionId: session, hookEventName: name, notificationType: notif, cwd: cwd)

@@ -13,6 +13,10 @@ echo "==> 1/4  Building + bundling ClaudeStatusBar.app (release)"
 
 echo "==> 2/4  Installing Claude Code hooks (existing hooks are preserved, settings backed up)"
 .build/release/claude-statusbar-hook --install
+# Seed the ignore list (skip automated/headless runs like the Mnemo server) if absent.
+IGNORE="$HOME/.claude/statusbar/ignore.txt"
+mkdir -p "$HOME/.claude/statusbar"
+[ -f "$IGNORE" ] || printf '%s\n' "$HOME/.mnemo" > "$IGNORE"
 
 echo "==> 3/4  Installing app to ~/Applications (so its icon resolves in notifications)"
 pkill -f "ClaudeStatusBarApp" 2>/dev/null || true

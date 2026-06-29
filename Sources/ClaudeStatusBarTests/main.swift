@@ -5,6 +5,7 @@ runSuites([
     stateMapperTests(),
     aggregationTests(),
     stateStoreTests(),
+    ignoreListTests(),
     hookProcessorTests(),
     statusViewModelTests(),
     notificationCoordinatorTests(),

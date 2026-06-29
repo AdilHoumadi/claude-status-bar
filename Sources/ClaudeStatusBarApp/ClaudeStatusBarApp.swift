@@ -241,6 +241,7 @@ struct SettingsView: View {
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
     @State private var hookStatus = ""
     @State private var startAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var ignoredProjects = ""
 
     var body: some View {
         Form {
@@ -295,6 +296,21 @@ struct SettingsView: View {
             }
 
             Section {
+                TextEditor(text: $ignoredProjects)
+                    .font(.system(.callout, design: .monospaced))
+                    .frame(height: 60)
+                    .padding(4)
+                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
+                    .onChange(of: ignoredProjects) { _, new in
+                        try? new.write(to: IgnoreList.defaultFileURL(), atomically: true, encoding: .utf8)
+                    }
+            } header: {
+                Text("Ignored projects")
+            } footer: {
+                Text("Sessions in these paths are never captured (one path per line) — use for automated/headless Claude runs like the Mnemo server.")
+            }
+
+            Section {
                 HStack {
                     Button("Install hooks") { runInstall() }
                     Button("Uninstall hooks") { runUninstall() }
@@ -311,6 +327,9 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 460, height: 600)
+        .onAppear {
+            ignoredProjects = (try? String(contentsOf: IgnoreList.defaultFileURL(), encoding: .utf8)) ?? ""
+        }
     }
 
     private func runInstall() {
