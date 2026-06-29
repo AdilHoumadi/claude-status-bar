@@ -18,6 +18,7 @@ private func lampNSColor(_ s: SessionState) -> NSColor {
 /// A traffic-light glyph for the menu bar: a solid housing silhouette (adapts to a light
 /// or dark menu bar) with three cut-out lamps; the `active` lamp is filled in colour.
 /// Non-template so the colour shows.
+@MainActor
 func menuBarIcon(for active: SessionState) -> NSImage {
     let w: CGFloat = 13, h: CGFloat = 18
     let image = NSImage(size: NSSize(width: w, height: h))
