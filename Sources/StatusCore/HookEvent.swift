@@ -10,19 +10,23 @@ public struct HookEvent: Codable, Sendable, Equatable {
     public let notificationType: String?
     public let cwd: String?
     public let transcriptPath: String?
+    /// Present when the hook fires inside a subagent — the session is still working.
+    public let agentId: String?
 
     public init(
         sessionId: String,
         hookEventName: String,
         notificationType: String? = nil,
         cwd: String? = nil,
-        transcriptPath: String? = nil
+        transcriptPath: String? = nil,
+        agentId: String? = nil
     ) {
         self.sessionId = sessionId
         self.hookEventName = hookEventName
         self.notificationType = notificationType
         self.cwd = cwd
         self.transcriptPath = transcriptPath
+        self.agentId = agentId
     }
 
     enum CodingKeys: String, CodingKey {
@@ -31,5 +35,6 @@ public struct HookEvent: Codable, Sendable, Equatable {
         case notificationType = "notification_type"
         case cwd
         case transcriptPath = "transcript_path"
+        case agentId = "agent_id"
     }
 }

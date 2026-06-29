@@ -20,6 +20,16 @@ func stateMapperTests() -> TestSuite { ("StateMapperTests", { t in
     t.expectEqual(StateMapper.outcome(for: event("SessionStart")), .create)
     t.expectEqual(StateMapper.outcome(for: event("SessionEnd")), .remove)
     t.expectEqual(StateMapper.outcome(for: event("SomethingWeird")), .ignore)
+
+    // subagent context (agent_id present): a subagent finishing must NOT mark the
+    // session done/removed; tool use still counts as busy.
+    func sub(_ name: String) -> HookEvent {
+        HookEvent(sessionId: "s1", hookEventName: name, cwd: "/tmp/proj", agentId: "agent-1")
+    }
+    t.expectEqual(StateMapper.outcome(for: sub("Stop")), .ignore)
+    t.expectEqual(StateMapper.outcome(for: sub("SessionEnd")), .ignore)
+    t.expectEqual(StateMapper.outcome(for: sub("SessionStart")), .ignore)
+    t.expectEqual(StateMapper.outcome(for: sub("PreToolUse")), .set(.yellow))
 }) }
 
 func aggregationTests() -> TestSuite { ("AggregationTests", { t in

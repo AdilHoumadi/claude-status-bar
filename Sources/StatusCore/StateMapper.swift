@@ -15,15 +15,19 @@ public enum MapOutcome: Equatable, Sendable {
 /// Pure mapping from a hook event to a state outcome. No I/O.
 public enum StateMapper {
     public static func outcome(for event: HookEvent) -> MapOutcome {
+        // Events fired inside a subagent don't represent the session's own lifecycle: a
+        // subagent finishing (Stop) or ending must NOT mark the session done/removed —
+        // the main agent is still working. Tool use still counts as "busy" (yellow).
+        let inSubagent = event.agentId != nil
         switch event.hookEventName {
         case "SessionStart":
-            return .create
+            return inSubagent ? .ignore : .create
         case "SessionEnd":
-            return .remove
+            return inSubagent ? .ignore : .remove
         case "UserPromptSubmit", "PreToolUse", "PostToolUse", "PreCompact", "PostCompact":
             return .set(.yellow)
         case "Stop":
-            return .set(.green)
+            return inSubagent ? .ignore : .set(.green)
         case "Notification":
             // Only permission/idle prompts mean "waiting for the user". Every other
             // notification type (auth_success, elicitation_*, …) is irrelevant — never
