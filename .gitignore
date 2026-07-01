@@ -9,3 +9,6 @@ ClaudeStatusBar.app/
 
 # generated iconset (icns is committed)
 assets/AppIcon.iconset/
+
+# built dmg / release artifacts
+dist/
