@@ -269,17 +269,18 @@ struct DropdownView: View {
             header("Options")
             toggleRow("Notifications", isOn: $notificationsEnabled)
             toggleRow("Sound", isOn: $soundEnabled)
+            // Opacity dims both this menu and the floating window, so it's always available.
+            HStack(spacing: 8) {
+                Image(systemName: "circle.lefthalf.filled")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                Slider(value: $panelOpacity, in: 0...1).controlSize(.mini)
+                Text("\(Int(panelOpacity * 100))%")
+                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                    .frame(width: 32, alignment: .trailing)
+            }
+            .padding(.vertical, 3)
             toggleRow("Floating lights", isOn: $model.showFloating)
             if model.showFloating {
-                HStack(spacing: 8) {
-                    Image(systemName: "circle.lefthalf.filled")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                    Slider(value: $panelOpacity, in: 0...1).controlSize(.mini)
-                    Text("\(Int(panelOpacity * 100))%")
-                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-                        .frame(width: 32, alignment: .trailing)
-                }
-                .padding(.vertical, 3)
                 HStack(spacing: 8) {
                     Image(systemName: "rectangle.grid.1x2")
                         .font(.system(size: 11)).foregroundStyle(.secondary)
@@ -331,7 +332,12 @@ struct DropdownView: View {
         }
         .padding(12)
         .frame(width: 296)
-        .background(VisualEffectView())
+        .background {
+            ZStack {
+                VisualEffectView()
+                Color.black.opacity(panelOpacity * 0.7)   // same slider as the floating window
+            }
+        }
         .environment(\.colorScheme, .dark)
         .onAppear {
             ignoredProjects = (try? String(contentsOf: IgnoreList.defaultFileURL(), encoding: .utf8)) ?? ""
