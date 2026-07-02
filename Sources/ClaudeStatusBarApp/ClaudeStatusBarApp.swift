@@ -93,12 +93,10 @@ func currentNotificationSettings() -> NotificationSettings {
     let notificationsOn = flag("notificationsEnabled", true)
     let completion = flag("completionSound", true)
     let sound = flag("soundEnabled", true)
-    let mutedCSV = d.string(forKey: "mutedProjects") ?? ""
     var states = Set<SessionState>()
     if notificationsOn { states.insert(.red); states.insert(.green) }  // notify on red + green
     if completion { states.insert(.green) }                            // detect green for the chime
-    let muted = Set(mutedCSV.split(separator: "\n").map(String.init).filter { !$0.isEmpty })
-    return NotificationSettings(notifyStates: states, soundEnabled: sound, mutedProjects: muted)
+    return NotificationSettings(notifyStates: states, soundEnabled: sound)
 }
 
 /// Posts desktop notifications via UNUserNotificationCenter, which requires a bundled
@@ -231,7 +229,6 @@ struct SettingsView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("completionSound") private var completionSound = true
-    @AppStorage("mutedProjects") private var mutedProjects = ""
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
     @State private var hookStatus = ""
     @State private var startAtLogin = SMAppService.mainApp.status == .enabled
@@ -279,18 +276,6 @@ struct SettingsView: View {
             }
 
             Section {
-                TextEditor(text: $mutedProjects)
-                    .font(.system(.callout, design: .monospaced))
-                    .frame(height: 72)
-                    .padding(4)
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
-            } header: {
-                Text("Muted projects")
-            } footer: {
-                Text("One project path (cwd) per line — muted projects never notify.")
-            }
-
-            Section {
                 TextEditor(text: $ignoredProjects)
                     .font(.system(.callout, design: .monospaced))
                     .frame(height: 60)
@@ -302,7 +287,7 @@ struct SettingsView: View {
             } header: {
                 Text("Ignored projects")
             } footer: {
-                Text("Sessions in these paths are never captured (one path per line) — use for automated/headless Claude runs (background jobs).")
+                Text("Sessions whose folder is under these paths are never shown or notified (one path per line). Use for automated/headless runs, or any project you want hidden.")
             }
 
             Section {

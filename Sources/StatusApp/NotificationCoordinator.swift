@@ -23,18 +23,15 @@ public struct AppNotification: Equatable, Sendable {
 public struct NotificationSettings: Sendable, Equatable {
     public var notifyStates: Set<SessionState>   // which entered-states notify
     public var soundEnabled: Bool
-    public var mutedProjects: Set<String>        // cwd paths to silence
     public var debounceInterval: TimeInterval
 
     public init(
         notifyStates: Set<SessionState> = [.red, .green],
         soundEnabled: Bool = true,
-        mutedProjects: Set<String> = [],
         debounceInterval: TimeInterval = 5
     ) {
         self.notifyStates = notifyStates
         self.soundEnabled = soundEnabled
-        self.mutedProjects = mutedProjects
         self.debounceInterval = debounceInterval
     }
 }
@@ -62,7 +59,6 @@ public final class NotificationCoordinator {
             guard previous != session.state else { continue }  // no transition
             guard settings.notifyStates.contains(session.state) else { continue }
             guard let kind = kind(for: session.state) else { continue }
-            if let cwd = session.cwd, settings.mutedProjects.contains(cwd) { continue }
 
             let key = "\(session.id)|\(session.state.rawValue)"
             if let last = lastFired[key], now.timeIntervalSince(last) < settings.debounceInterval {

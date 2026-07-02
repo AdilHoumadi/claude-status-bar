@@ -42,13 +42,6 @@ func notificationCoordinatorTests() -> TestSuite { ("NotificationCoordinatorTest
     t.expectEqual(out.count, 1)
     t.expectEqual(out.first?.kind, .done)
 
-    // muted project: real transition still produces nothing
-    let cm = NotificationCoordinator()
-    let muted = NotificationSettings(mutedProjects: ["/work/app"])
-    _ = cm.process(sessions: [item("m", .yellow)], settings: muted, now: at(0))
-    out = cm.process(sessions: [item("m", .red)], settings: muted, now: at(1))
-    t.expectEqual(out.count, 0)
-
     // notify on running (yellow) when enabled -> .started
     let cy = NotificationCoordinator()
     let allStates = NotificationSettings(notifyStates: [.red, .yellow, .green])
