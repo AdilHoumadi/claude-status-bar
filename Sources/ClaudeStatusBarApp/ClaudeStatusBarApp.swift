@@ -153,7 +153,10 @@ final class AppModel: ObservableObject {
 
     init() {
         showFloating = UserDefaults.standard.bool(forKey: "showFloating")
-        vm = StatusViewModel(store: StateStore(directory: StateStore.defaultDirectory()))
+        vm = StatusViewModel(
+            store: StateStore(directory: StateStore.defaultDirectory()),
+            desktop: DesktopSessionSource()   // Cowork / Desktop Code tab (from host transcripts)
+        )
         refresh()
         // Poll-only (G8): one 0.5s timer drives state, notifications, and elapsed display.
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
@@ -255,6 +258,11 @@ struct DropdownView: View {
                         Text(formatElapsed(session.elapsed))
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(.secondary)
+                        Text(session.source.badge)
+                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 4))
                     }
                     .padding(.vertical, 3)
                 }
