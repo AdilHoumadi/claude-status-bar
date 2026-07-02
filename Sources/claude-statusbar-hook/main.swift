@@ -46,7 +46,7 @@ if args.contains("--uninstall") {
 // file. ALWAYS exits 0 (fail-open) and runs synchronously so it never blocks a turn.
 let data = FileHandle.standardInput.readDataToEndOfFile()
 if let event = try? JSONDecoder().decode(HookEvent.self, from: data) {
-    // Skip ignored projects (e.g. the Mnemo server's headless `claude -p` runs).
+    // Skip ignored projects (e.g. automated/headless `claude -p` runs).
     let prefixes = IgnoreList.prefixes(from: IgnoreList.defaultFileURL())
     if !IgnoreList.isIgnored(event.cwd, prefixes: prefixes) {
         let store = StateStore(directory: StateStore.defaultDirectory())

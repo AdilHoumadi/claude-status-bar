@@ -44,26 +44,26 @@ func stateStoreTests() -> TestSuite { ("StateStoreTests", { t in
 }) }
 
 func ignoreListTests() -> TestSuite { ("IgnoreListTests", { t in
-    let prefixes = ["/Users/adil/.mnemo", "/tmp/work/"]
+    let prefixes = ["/Users/me/tools", "/tmp/work/"]
     // exact + nested paths under an ignored prefix
-    t.expect(IgnoreList.isIgnored("/Users/adil/.mnemo", prefixes: prefixes), "exact match ignored")
-    t.expect(IgnoreList.isIgnored("/Users/adil/.mnemo/server", prefixes: prefixes), "nested path ignored")
+    t.expect(IgnoreList.isIgnored("/Users/me/tools", prefixes: prefixes), "exact match ignored")
+    t.expect(IgnoreList.isIgnored("/Users/me/tools/server", prefixes: prefixes), "nested path ignored")
     t.expect(IgnoreList.isIgnored("/tmp/work/x", prefixes: prefixes), "trailing-slash prefix ignored")
     // not a prefix-boundary match — must not false-positive on sibling dirs
-    t.expect(!IgnoreList.isIgnored("/Users/adil/.mnemo-other", prefixes: prefixes), "sibling not ignored")
-    t.expect(!IgnoreList.isIgnored("/Users/adil/Projects/app", prefixes: prefixes), "unrelated not ignored")
+    t.expect(!IgnoreList.isIgnored("/Users/me/tools-other", prefixes: prefixes), "sibling not ignored")
+    t.expect(!IgnoreList.isIgnored("/Users/me/projects/app", prefixes: prefixes), "unrelated not ignored")
     t.expect(!IgnoreList.isIgnored(nil, prefixes: prefixes), "nil cwd not ignored")
-    t.expect(!IgnoreList.isIgnored("/Users/adil/.mnemo", prefixes: []), "empty list ignores nothing")
+    t.expect(!IgnoreList.isIgnored("/Users/me/tools", prefixes: []), "empty list ignores nothing")
 
     // reading + tilde expansion from a file
     let dir = FileManager.default.temporaryDirectory.appendingPathComponent("csb-ign-\(UUID().uuidString)", isDirectory: true)
     try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     let file = dir.appendingPathComponent("ignore.txt")
-    try? Data("~/.mnemo\n\n  /tmp/x  \n".utf8).write(to: file)
+    try? Data("~/tools\n\n  /tmp/x  \n".utf8).write(to: file)
     let read = IgnoreList.prefixes(from: file)
     t.expectEqual(read.count, 2)
     t.expect(read.contains("/tmp/x"), "trimmed line parsed")
-    t.expect(read.contains { $0.hasSuffix("/.mnemo") && $0.hasPrefix("/") }, "tilde expanded to absolute")
+    t.expect(read.contains { $0.hasSuffix("/tools") && $0.hasPrefix("/") }, "tilde expanded to absolute")
 }) }
 
 func hookProcessorTests() -> TestSuite { ("HookProcessorTests", { t in

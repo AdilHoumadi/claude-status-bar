@@ -17,23 +17,23 @@ private func hasCommand(_ s: [String: Any], _ event: String, _ command: String) 
 }
 
 func settingsJsonMergeTests() -> TestSuite { ("SettingsJsonMergeTests", { t in
-    // Existing Mnemo hooks on SessionStart and Stop, plus an unrelated top-level key.
-    let mnemoStart: [String: Any] = ["matcher": "", "hooks": [["type": "command", "command": "/mnemo/recall.sh"]]]
-    let mnemoStop: [String: Any] = ["matcher": "", "hooks": [["type": "command", "command": "/mnemo/autolearn.sh"]]]
+    // Existing third-party hooks on SessionStart and Stop, plus an unrelated top-level key.
+    let existingStart: [String: Any] = ["matcher": "", "hooks": [["type": "command", "command": "/other-tool/on-start.sh"]]]
+    let existingStop: [String: Any] = ["matcher": "", "hooks": [["type": "command", "command": "/other-tool/on-stop.sh"]]]
     let settings: [String: Any] = [
-        "hooks": ["SessionStart": [mnemoStart], "Stop": [mnemoStop]],
+        "hooks": ["SessionStart": [existingStart], "Stop": [existingStop]],
         "model": "opus",
     ]
     let cmd = "/Users/x/.claude/statusbar/bin/claude-statusbar-hook"
 
     let merged = SettingsJsonMerge.merge(into: settings, hookCommand: cmd, timeout: 5)
 
-    // Mnemo hooks preserved
-    t.expect(hasCommand(merged, "SessionStart", "/mnemo/recall.sh"), "mnemo SessionStart preserved")
-    t.expect(hasCommand(merged, "Stop", "/mnemo/autolearn.sh"), "mnemo Stop preserved")
+    // existing third-party hooks preserved
+    t.expect(hasCommand(merged, "SessionStart", "/other-tool/on-start.sh"), "existing SessionStart preserved")
+    t.expect(hasCommand(merged, "Stop", "/other-tool/on-stop.sh"), "existing Stop preserved")
     // our entry added to every event
     for e in SettingsJsonMerge.events { t.expectEqual(countOurs(merged, e), 1) }
-    // SessionStart now holds both mnemo + ours
+    // SessionStart now holds both existing + ours
     t.expectEqual(groups(merged, "SessionStart").count, 2)
     // unrelated top-level key untouched
     t.expectEqual(merged["model"] as? String, "opus")
@@ -49,11 +49,11 @@ func settingsJsonMergeTests() -> TestSuite { ("SettingsJsonMergeTests", { t in
     for e in SettingsJsonMerge.events { t.expectEqual(countOurs(twice, e), 1) }
     t.expectEqual(groups(twice, "SessionStart").count, 2)
 
-    // unmerge removes only ours; mnemo survives; events we created are cleaned up
+    // unmerge removes only ours; existing survives; events we created are cleaned up
     let un = SettingsJsonMerge.unmerge(from: twice)
     for e in SettingsJsonMerge.events { t.expectEqual(countOurs(un, e), 0) }
-    t.expect(hasCommand(un, "SessionStart", "/mnemo/recall.sh"), "mnemo survives unmerge")
-    t.expect(hasCommand(un, "Stop", "/mnemo/autolearn.sh"), "mnemo Stop survives unmerge")
+    t.expect(hasCommand(un, "SessionStart", "/other-tool/on-start.sh"), "existing survives unmerge")
+    t.expect(hasCommand(un, "Stop", "/other-tool/on-stop.sh"), "existing Stop survives unmerge")
     t.expect((un["hooks"] as? [String: Any])?["Notification"] == nil, "empty Notification key removed on unmerge")
 
     // fresh user (no settings) — merge into empty

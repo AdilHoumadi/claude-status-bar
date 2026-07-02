@@ -12,3 +12,6 @@ assets/AppIcon.iconset/
 
 # built dmg / release artifacts
 dist/
+
+# internal planning docs (research/plan/verify/innovate)
+.ai/

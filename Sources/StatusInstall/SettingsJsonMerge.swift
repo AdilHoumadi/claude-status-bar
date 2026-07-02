@@ -2,7 +2,7 @@ import Foundation
 
 /// Pure, structure-preserving merge of our status hooks into a Claude Code settings.json
 /// object. Works on `[String: Any]` (JSONSerialization) rather than Codable so unknown
-/// keys and other hooks (e.g. Mnemo's) are never dropped.
+/// keys and other hooks (e.g. other tools') are never dropped.
 ///
 /// Our entries are identified by the marker substring in their command path, so merge is
 /// idempotent and unmerge removes only what we added.

@@ -25,6 +25,18 @@ launches it. Re-running is safe — hooks merge without duplicating.
 To keep it permanently, drag `ClaudeStatusBar.app` to `/Applications` (also recommended
 for the **Start at login** option to register reliably).
 
+### Or grab a .dmg
+
+`./scripts/dmg.sh` builds `dist/ClaudeStatusBar.dmg` (drag-to-Applications). It's ad-hoc
+signed (not notarized), so on first launch **right-click the app → Open**, or run:
+
+```bash
+xattr -dr com.apple.quarantine /Applications/ClaudeStatusBar.app
+```
+
+Then open **Settings → Install hooks** (or run `~/.claude/statusbar/bin/claude-statusbar-hook --install`)
+to wire it into Claude Code.
+
 ## Using it
 
 - **Menu bar dot** — aggregate state across all sessions (worst-state-wins).

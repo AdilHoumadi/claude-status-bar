@@ -308,7 +308,7 @@ struct SettingsView: View {
             } header: {
                 Text("Ignored projects")
             } footer: {
-                Text("Sessions in these paths are never captured (one path per line) — use for automated/headless Claude runs like the Mnemo server.")
+                Text("Sessions in these paths are never captured (one path per line) — use for automated/headless Claude runs (background jobs).")
             }
 
             Section {

@@ -39,7 +39,7 @@ struct MiniTrafficLight: View {
 
     private var name: String {
         let n = session.displayName
-        return n.hasPrefix(".") ? String(n.dropFirst()) : n   // ".mnemo" -> "mnemo"
+        return n.hasPrefix(".") ? String(n.dropFirst()) : n   // ".config" -> "config"
     }
 
     var body: some View {
