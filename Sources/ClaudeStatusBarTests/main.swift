@@ -13,4 +13,5 @@ runSuites([
     settingsJsonMergeTests(),
     hookInstallerTests(),
     floatingSelectionTests(),
+    floatingLayoutTests(),
 ])

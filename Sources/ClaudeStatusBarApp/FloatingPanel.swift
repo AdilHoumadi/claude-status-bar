@@ -84,9 +84,13 @@ struct FloatingLightsView: View {
     @ObservedObject var model: AppModel
     // Shared with the Settings slider; updates the glass live as it's dragged.
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
+    // How many lights to show before collapsing the rest into the +N chip (1–5).
+    @AppStorage("floatingMaxLights") private var floatingMaxLights: Double = 3
 
     var body: some View {
-        let selection = FloatingSelection.select(model.sessions, max: 3)
+        let selection = FloatingSelection.select(model.sessions, max: Int(floatingMaxLights))
+        let contentWidth = FloatingLayout.contentWidth(
+            shown: selection.shown.count, overflow: selection.overflow > 0)
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 Text("Claude Code")
@@ -126,8 +130,8 @@ struct FloatingLightsView: View {
                 }
             }
         }
-        // Fixed width sized for 3 lights + the overflow chip; stays this size for fewer.
-        .frame(width: 178, alignment: .leading)
+        // Width fits the lights actually shown (+ chip); floored so the header never clips.
+        .frame(width: contentWidth, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
         .background {
@@ -152,10 +156,12 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     func show(model: AppModel) {
         if panel == nil {
             let hosting = NSHostingView(rootView: FloatingLightsView(model: model))
-            // Fixed window sized for 3 lights + chip (matches the content frame). No dynamic
-            // resizing — keeps it stable, rounded, and never clips the content.
+            let sel = FloatingSelection.select(model.sessions, max: floatingMaxLights())
+            let w = FloatingLayout.windowWidth(shown: sel.shown.count, overflow: sel.overflow > 0)
+            // Window is sized to the content and resized on demand (see updateSize) so it stays
+            // snug for the lights actually shown while never clipping.
             let p = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: 202, height: 120),
+                contentRect: NSRect(x: 0, y: 0, width: w, height: FloatingLayout.height),
                 styleMask: [.nonactivatingPanel, .borderless],
                 backing: .buffered, defer: false
             )
@@ -171,6 +177,22 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             reposition(p)
         }
         panel?.orderFrontRegardless()
+    }
+
+    /// Resize the panel to fit `shown` lights (+ chip), keeping the top-right anchor. Called
+    /// each refresh so the width tracks the live session count and the max-lights setting.
+    func updateSize(shown: Int, overflow: Bool) {
+        guard let p = panel else { return }
+        let w = FloatingLayout.windowWidth(shown: shown, overflow: overflow)
+        if abs(p.frame.width - w) > 0.5 {
+            p.setContentSize(NSSize(width: w, height: FloatingLayout.height))
+            reposition(p)   // setContentSize also fires windowDidResize -> reposition; belt & braces
+        }
+    }
+
+    private func floatingMaxLights() -> Int {
+        let raw = UserDefaults.standard.object(forKey: "floatingMaxLights") as? Double ?? 3
+        return min(5, max(1, Int(raw)))
     }
 
     func hide() {

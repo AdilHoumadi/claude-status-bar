@@ -168,6 +168,13 @@ final class AppModel: ObservableObject {
         aggregate = vm.aggregate
         sessions = vm.sessions
 
+        // Keep the floating panel's width in step with the live session count + max-lights setting.
+        if showFloating {
+            let maxLights = min(5, max(1, Int(UserDefaults.standard.object(forKey: "floatingMaxLights") as? Double ?? 3)))
+            let sel = FloatingSelection.select(vm.sessions, max: maxLights)
+            floating.updateSize(shown: sel.shown.count, overflow: sel.overflow > 0)
+        }
+
         let settings = currentNotificationSettings()
         let d = UserDefaults.standard
         func flag(_ key: String, _ def: Bool) -> Bool { d.object(forKey: key) as? Bool ?? def }
@@ -219,6 +226,7 @@ struct DropdownView: View {
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
+    @AppStorage("floatingMaxLights") private var floatingMaxLights: Double = 3
     @State private var startAtLogin = SMAppService.mainApp.status == .enabled
     @State private var ignoredProjects = ""
     @State private var hookStatus = ""
@@ -270,6 +278,15 @@ struct DropdownView: View {
                     Text("\(Int(panelOpacity * 100))%")
                         .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
                         .frame(width: 32, alignment: .trailing)
+                }
+                .padding(.vertical, 3)
+                HStack(spacing: 8) {
+                    Image(systemName: "rectangle.grid.1x2")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    Slider(value: $floatingMaxLights, in: 1...5, step: 1).controlSize(.mini)
+                    Text("\(Int(floatingMaxLights)) max")
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        .frame(width: 44, alignment: .trailing)
                 }
                 .padding(.vertical, 3)
             }
