@@ -12,18 +12,44 @@ No network, no telemetry. Everything is local files under `~/.claude/`.
 - macOS 14 (Sonoma) or later
 - Swift toolchain (Xcode **or** Command Line Tools: `xcode-select --install`)
 
-## Install
+## Install (CLI)
+
+Everything installs from the terminal — no Xcode project, no App Store.
 
 ```bash
+git clone https://github.com/AdilHoumadi/claude-status-bar.git
+cd claude-status-bar
 ./scripts/install.sh
 ```
 
-That builds the app, bundles it (ad-hoc signed), wires the hooks into
-`~/.claude/settings.json` (your existing hooks are preserved, a `.bak` is written), and
-launches it. Re-running is safe — hooks merge without duplicating.
+`./scripts/install.sh` does the whole thing:
 
-To keep it permanently, drag `ClaudeStatusBar.app` to `/Applications` (also recommended
-for the **Start at login** option to register reliably).
+1. builds a release binary (`swift build -c release`),
+2. bundles it into `ClaudeStatusBar.app` (ad-hoc signed),
+3. copies it to **`~/Applications`** (its permanent home),
+4. wires the hooks into `~/.claude/settings.json` — your existing hooks are preserved and
+   a `.bak` is written,
+5. launches it — a dot appears in your menu bar.
+
+Re-running is safe: hooks merge idempotently (no duplicates), and reinstalling to the same
+path preserves your notification permission.
+
+Open a **new** Claude Code session afterwards — a session loads its hooks at startup, so
+sessions already running won't light up until they restart.
+
+> **Keep one copy.** The app lives in `~/Applications` and **Start at login** registers it
+> from there. Don't also copy it to `/Applications` — a second copy with the same bundle id
+> shadows updates (the old one keeps launching) and is a pain to untangle. Pick one location.
+
+### Update
+
+```bash
+git pull
+./scripts/install.sh   # rebuilds, replaces ~/Applications, re-wires hooks
+```
+
+If an old instance is still running, quit it from the menu (or `killall ClaudeStatusBarApp`)
+before relaunching so the new build takes over.
 
 ### Or grab a .dmg
 
@@ -34,26 +60,38 @@ signed (not notarized), so on first launch **right-click the app → Open**, or 
 xattr -dr com.apple.quarantine /Applications/ClaudeStatusBar.app
 ```
 
-Then open **Settings → Install hooks** (or run `~/.claude/statusbar/bin/claude-statusbar-hook --install`)
-to wire it into Claude Code.
+Then click the menu-bar dot → **Install hooks** (or run
+`~/.claude/statusbar/bin/claude-statusbar-hook --install`) to wire it into Claude Code.
 
 ## Using it
 
-- **Menu bar dot** — aggregate state across all sessions (worst-state-wins).
-- **Dropdown** — per-session list, plus toggles for **Floating lights** and **Settings**.
-- **Floating lights** — an always-on-top glass panel with a road traffic-light per
-  session (worst-first, max 5, `+N` overflow). Drag it anywhere; position is remembered.
-- **Settings (⌘,)** — start at login, which transitions notify, sound, per-project mute,
-  and Install/Uninstall hooks.
+Everything lives in the menu-bar dropdown — click the dot to open it.
 
-Open a **new** Claude Code session to see it move — a session loads its hooks at startup.
+- **Menu bar dot** — aggregate state across all sessions (worst-state-wins).
+- **Sessions** — per-session list: project name and time in the current state.
+- **Floating lights** — an always-on-top glass panel with a road traffic-light per session
+  (worst-first, `+N` overflow chip). The width adapts to how many are shown. Drag it
+  anywhere; the position is remembered.
+- **Options**:
+  - **Notifications** / **Sound** — banners (and sound) on the transitions that matter.
+  - **Appearance** — System / Light / Dark, applied to both surfaces.
+  - **Opacity** — dims the dropdown and the floating panel together.
+  - **Floating lights** — toggle the panel, plus a **Max lights** slider (1–5) capping how
+    many show before the `+N` chip.
+  - **Start at login**.
+- **Ignored projects** — one path prefix per line; sessions under those folders are hidden
+  (handy for headless/automated `claude -p` runs).
+- **Install hooks / Uninstall** — wire the hooks into Claude Code, or remove them.
+
+CLI, IDE extensions, and Claude Desktop's Code / Cowork sessions are all covered — they run
+the Claude Code engine and fire the same hooks.
 
 ## State model
 
 | Hook event | State |
 |---|---|
 | `Notification` (`permission_prompt` / `idle_prompt`) | 🔴 waiting for you |
-| `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PreCompact`/`PostCompact` | 🟡 running |
+| `UserPromptSubmit`, `PreToolUse`, `PostToolUse` | 🟡 running |
 | `Stop` | 🟢 done / idle |
 | `SessionStart` / `SessionEnd` | create / remove the session |
 
@@ -80,7 +118,7 @@ never block or fail a Claude Code turn. The installed helper lives at a stable p
 
 ```bash
 ~/.claude/statusbar/bin/claude-statusbar-hook --uninstall
-rm -rf ClaudeStatusBar.app ~/.claude/statusbar
+rm -rf ~/Applications/ClaudeStatusBar.app ~/.claude/statusbar
 ```
 
 ## Troubleshooting
@@ -89,7 +127,11 @@ rm -rf ClaudeStatusBar.app ~/.claude/statusbar
   Notifications only fire from the bundled `.app` (not bare `swift run`).
 - **Dot doesn't move** — make sure you opened a *new* session after installing; check a
   state file appears: `ls ~/.claude/statusbar/`.
-- **"Start at login" won't stick** — move the app to `/Applications` first.
+- **"Start at login" won't stick / an old build keeps launching** — make sure there's only
+  **one** copy of the app. A duplicate in `/Applications` and `~/Applications` share a bundle
+  id, so the wrong one launches at login and shadows updates. Keep the `~/Applications` copy
+  and delete the other (`sudo rm -rf /Applications/ClaudeStatusBar.app`), then toggle **Start
+  at login** off/on to re-register.
 
 ## Development
 
