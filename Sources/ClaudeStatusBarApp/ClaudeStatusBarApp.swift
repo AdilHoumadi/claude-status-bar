@@ -244,12 +244,17 @@ struct DropdownView: View {
                     .padding(.vertical, 4)
             } else {
                 ForEach(model.sessions) { session in
+                    let color = Color(nsColor: lampNSColor(session.state))
                     HStack(spacing: 9) {
-                        Text(session.state.emoji).font(.system(size: 11))
+                        Circle()
+                            .fill(color)
+                            .frame(width: 8, height: 8)
+                            .shadow(color: color.opacity(0.7), radius: 3)
                         Text(session.displayName).font(.system(size: 13)).lineLimit(1)
                         Spacer(minLength: 8)
                         Text(formatElapsed(session.elapsed))
-                            .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.secondary)
                     }
                     .padding(.vertical, 3)
                 }
