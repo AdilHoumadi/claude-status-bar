@@ -37,4 +37,37 @@ func statusViewModelTests() -> TestSuite { ("StatusViewModelTests", { t in
     vm2.refresh()
     t.expectEqual(vm2.sessions.count, 0)
     t.expectEqual(vm2.aggregate, .green)
+
+    // Desktop/hook dedup: a Cowork session fires hooks AND leaves a transcript for the same
+    // folder (different ids). The Desktop copy must be dropped; a hook-less folder survives.
+    let ddir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("csb-vm-dd-\(UUID().uuidString)", isDirectory: true)
+    let dstore = StateStore(directory: ddir)
+    let dnow = Date(timeIntervalSince1970: 20_000)
+    try? dstore.write(SessionRecord(sessionId: "hook1", state: .green, cwd: "/work/shared",
+                                    updatedAt: dnow, stateSince: dnow))
+    try? dstore.write(SessionRecord(sessionId: "hook2", state: .green, cwd: "/work/shared/",  // trailing slash
+                                    updatedAt: dnow, stateSince: dnow))
+
+    let deskBase = FileManager.default.temporaryDirectory
+        .appendingPathComponent("csb-desk-dd-\(UUID().uuidString)", isDirectory: true)
+    let deskSess = deskBase.appendingPathComponent("acct/sess", isDirectory: true)
+    try? FileManager.default.createDirectory(at: deskSess, withIntermediateDirectories: true)
+    func writeDesk(_ id: String, cwd: String, agoSec: Double) {
+        let ms = (dnow.timeIntervalSince1970 - agoSec) * 1000
+        let json = "{\"sessionId\":\"\(id)\",\"cwd\":\"\(cwd)\",\"lastActivityAt\":\(ms),\"isArchived\":false}"
+        try? Data(json.utf8).write(to: deskSess.appendingPathComponent("local_\(id).json"))
+    }
+    writeDesk("dupe", cwd: "/work/shared", agoSec: 2)     // same folder as hooks -> dropped
+    writeDesk("solo", cwd: "/work/onlyapp", agoSec: 2)    // no hook -> kept as APP
+
+    let vm3 = StatusViewModel(store: dstore, desktop: DesktopSessionSource(baseDir: deskBase),
+                              ttl: 1800, clock: { dnow })
+    vm3.refresh()
+    let ids = Set(vm3.sessions.map(\.id))
+    t.expectEqual(vm3.sessions.count, 3)                  // hook1, hook2, solo (dupe dropped)
+    t.expect(ids.contains("hook1") && ids.contains("hook2"), "both hook sessions kept")
+    t.expect(ids.contains("solo"), "hook-less desktop session kept")
+    t.expect(!ids.contains("dupe"), "desktop dupe of a hook folder dropped")
+    t.expectEqual(vm3.sessions.first { $0.id == "solo" }?.source, .desktop)
 }) }
