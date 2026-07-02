@@ -235,81 +235,105 @@ struct SettingsView: View {
     @State private var ignoredProjects = ""
 
     var body: some View {
-        Form {
-            Section("General") {
-                Toggle("Start at login", isOn: $startAtLogin)
-                    .onChange(of: startAtLogin) { _, on in
-                        do {
-                            if on { try SMAppService.mainApp.register() }
-                            else { try SMAppService.mainApp.unregister() }
-                        } catch {
-                            startAtLogin = !on  // revert if the system refused
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                group("General") {
+                    toggleRow("Start at login", isOn: $startAtLogin)
+                        .onChange(of: startAtLogin) { _, on in
+                            do {
+                                if on { try SMAppService.mainApp.register() }
+                                else { try SMAppService.mainApp.unregister() }
+                            } catch { startAtLogin = !on }
+                        }
+                }
+
+                group("Notifications", caption: "When a session needs you (red) or finishes (green).") {
+                    toggleRow("Enable notifications", isOn: $notificationsEnabled)
+                }
+
+                group("Sound") {
+                    toggleRow("Enable sound", isOn: $soundEnabled)
+                    rowDivider
+                    toggleRow("Completion sound", isOn: $completionSound).disabled(!soundEnabled)
+                }
+
+                group("Floating panel") {
+                    toggleRow("Show floating lights", isOn: $model.showFloating)
+                    rowDivider
+                    HStack(spacing: 8) {
+                        Text("Opacity").font(.system(size: 13))
+                        Spacer()
+                        Slider(value: $panelOpacity, in: 0...1).controlSize(.small).frame(width: 120)
+                        Text("\(Int(panelOpacity * 100))%")
+                            .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
+                            .frame(width: 34, alignment: .trailing)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .disabled(!model.showFloating)
+                }
+
+                group("Ignored projects", caption: "One path per line — never shown or notified.") {
+                    TextEditor(text: $ignoredProjects)
+                        .font(.system(size: 12, design: .monospaced))
+                        .scrollContentBackground(.hidden)
+                        .frame(height: 48)
+                        .padding(.horizontal, 8).padding(.vertical, 6)
+                        .onChange(of: ignoredProjects) { _, new in
+                            try? new.write(to: IgnoreList.defaultFileURL(), atomically: true, encoding: .utf8)
+                        }
+                }
+
+                group("Claude Code hooks", caption: "Merged into ~/.claude/settings.json (backed up); other hooks preserved.") {
+                    HStack(spacing: 8) {
+                        Button("Install") { runInstall() }
+                        Button("Uninstall") { runUninstall() }
+                        Spacer()
+                        if !hookStatus.isEmpty {
+                            Text(hookStatus).font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                     }
-            }
-
-            Section {
-                Toggle("Enable notifications", isOn: $notificationsEnabled)
-            } header: {
-                Text("Notifications")
-            } footer: {
-                Text("Notifies when a session needs you (red) or finishes (green).")
-            }
-
-            Section("Sound") {
-                Toggle("Enable sound", isOn: $soundEnabled)
-                Toggle("Completion sound", isOn: $completionSound).disabled(!soundEnabled)
-            }
-
-            Section("Floating panel") {
-                Toggle("Show floating lights", isOn: $model.showFloating)
-                LabeledContent("Background opacity") {
-                    HStack(spacing: 8) {
-                        Slider(value: $panelOpacity, in: 0...1).frame(width: 150)
-                        Text("\(Int(panelOpacity * 100))%")
-                            .monospacedDigit()
-                            .foregroundStyle(.secondary)
-                            .frame(width: 38, alignment: .trailing)
-                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
                 }
-                .disabled(!model.showFloating)
             }
-
-            Section {
-                TextEditor(text: $ignoredProjects)
-                    .font(.system(.callout, design: .monospaced))
-                    .frame(height: 60)
-                    .padding(4)
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.quaternary))
-                    .onChange(of: ignoredProjects) { _, new in
-                        try? new.write(to: IgnoreList.defaultFileURL(), atomically: true, encoding: .utf8)
-                    }
-            } header: {
-                Text("Ignored projects")
-            } footer: {
-                Text("Sessions whose folder is under these paths are never shown or notified (one path per line). Use for automated/headless runs, or any project you want hidden.")
-            }
-
-            Section {
-                HStack {
-                    Button("Install hooks") { runInstall() }
-                    Button("Uninstall hooks") { runUninstall() }
-                    Spacer()
-                    if !hookStatus.isEmpty {
-                        Text(hookStatus).font(.callout).foregroundStyle(.secondary)
-                    }
-                }
-            } header: {
-                Text("Claude Code hooks")
-            } footer: {
-                Text("Writes status hooks into ~/.claude/settings.json (backed up to settings.json.bak first). Your existing hooks are preserved.")
-            }
+            .padding(16)
         }
-        .formStyle(.grouped)
-        .frame(width: 460, height: 600)
+        .frame(width: 340, height: 520)
         .onAppear {
             ignoredProjects = (try? String(contentsOf: IgnoreList.defaultFileURL(), encoding: .utf8)) ?? ""
         }
+    }
+
+    // MARK: - compact section styling
+
+    private var rowDivider: some View {
+        Divider().padding(.leading, 12)
+    }
+
+    @ViewBuilder
+    private func group<Content: View>(_ title: String, caption: String? = nil,
+                                      @ViewBuilder _ content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .semibold)).kerning(0.6)
+                .foregroundStyle(.secondary)
+            VStack(spacing: 0) { content() }
+                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.primary.opacity(0.08)))
+            if let caption {
+                Text(caption)
+                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        HStack {
+            Text(title).font(.system(size: 13))
+            Spacer()
+            Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch).controlSize(.small)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
     }
 
     private func runInstall() {
@@ -340,10 +364,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
     func show(model: AppModel) {
         if window == nil {
             let w = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 460, height: 600),
+                contentRect: NSRect(x: 0, y: 0, width: 340, height: 520),
                 styleMask: [.titled, .closable], backing: .buffered, defer: false
             )
-            w.title = "Claude Status Bar Settings"
+            w.title = "Settings"
             w.contentView = NSHostingView(rootView: SettingsView(model: model))
             w.isReleasedWhenClosed = false
             w.center()
