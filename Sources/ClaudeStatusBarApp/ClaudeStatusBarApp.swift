@@ -91,11 +91,9 @@ func currentNotificationSettings() -> NotificationSettings {
     let d = UserDefaults.standard
     func flag(_ key: String, _ def: Bool) -> Bool { d.object(forKey: key) as? Bool ?? def }
     let notificationsOn = flag("notificationsEnabled", true)
-    let completion = flag("completionSound", true)
     let sound = flag("soundEnabled", true)
     var states = Set<SessionState>()
     if notificationsOn { states.insert(.red); states.insert(.green) }  // notify on red + green
-    if completion { states.insert(.green) }                            // detect green for the chime
     return NotificationSettings(notifyStates: states, soundEnabled: sound)
 }
 
@@ -175,24 +173,16 @@ final class AppModel: ObservableObject {
         func flag(_ key: String, _ def: Bool) -> Bool { d.object(forKey: key) as? Bool ?? def }
         let notificationsOn = flag("notificationsEnabled", true)  // master switch
         let soundOn = flag("soundEnabled", true)                  // master switch
-        let completion = flag("completionSound", true)
 
         // Always process (keeps transition tracking in sync); the switches gate output.
         for note in coordinator.process(sessions: vm.sessions, settings: settings, now: Date()) {
             switch note.kind {
-            case .needsYou:
+            case .needsYou, .done:
                 if notificationsOn { notifier.post(note, sound: soundOn) }
             case .started:
                 break  // "running" notifications aren't exposed
-            case .done:
-                if soundOn && completion { playCompletionSound() }
-                if notificationsOn { notifier.post(note, sound: soundOn && !completion) }
             }
         }
-    }
-
-    private func playCompletionSound() {
-        (NSSound(named: "Glass") ?? NSSound(named: "Hero"))?.play()
     }
 }
 
@@ -228,7 +218,6 @@ struct DropdownView: View {
     @ObservedObject var model: AppModel
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("soundEnabled") private var soundEnabled = true
-    @AppStorage("completionSound") private var completionSound = true
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
     @State private var startAtLogin = SMAppService.mainApp.status == .enabled
     @State private var ignoredProjects = ""
@@ -272,7 +261,6 @@ struct DropdownView: View {
             header("Options")
             toggleRow("Notifications", isOn: $notificationsEnabled)
             toggleRow("Sound", isOn: $soundEnabled)
-            toggleRow("Completion sound", isOn: $completionSound)
             toggleRow("Floating lights", isOn: $model.showFloating)
             if model.showFloating {
                 HStack(spacing: 8) {
