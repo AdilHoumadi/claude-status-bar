@@ -149,7 +149,6 @@ final class AppModel: ObservableObject {
     private let coordinator = NotificationCoordinator()
     private let notifier: Notifier = UserNotifier()
     private let floating = FloatingPanelController()
-    private let settings = SettingsWindowController()
     private var timer: Timer?
 
     init() {
@@ -162,8 +161,6 @@ final class AppModel: ObservableObject {
         }
         if showFloating { floating.show(model: self) }
     }
-
-    func showSettings() { settings.show(model: self) }
 
     func refresh() {
         vm.refresh()
@@ -224,107 +221,112 @@ func helperSourceURL() -> URL {
     return executable.deletingLastPathComponent().appendingPathComponent("claude-statusbar-hook")
 }
 
-struct SettingsView: View {
+struct DropdownView: View {
     @ObservedObject var model: AppModel
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("completionSound") private var completionSound = true
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
-    @State private var hookStatus = ""
     @State private var startAtLogin = SMAppService.mainApp.status == .enabled
     @State private var ignoredProjects = ""
+    @State private var hookStatus = ""
+
+    private var version: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
+    }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                group("General") {
-                    toggleRow("Start at login", isOn: $startAtLogin)
-                        .onChange(of: startAtLogin) { _, on in
-                            do {
-                                if on { try SMAppService.mainApp.register() }
-                                else { try SMAppService.mainApp.unregister() }
-                            } catch { startAtLogin = !on }
-                        }
-                }
-
-                group("Notifications", caption: "When a session needs you (red) or finishes (green).") {
-                    toggleRow("Enable notifications", isOn: $notificationsEnabled)
-                }
-
-                group("Sound") {
-                    toggleRow("Enable sound", isOn: $soundEnabled)
-                    rowDivider
-                    toggleRow("Completion sound", isOn: $completionSound).disabled(!soundEnabled)
-                }
-
-                group("Floating panel") {
-                    toggleRow("Show floating lights", isOn: $model.showFloating)
-                    rowDivider
-                    HStack(spacing: 8) {
-                        Text("Opacity").font(.system(size: 13))
-                        Spacer()
-                        Slider(value: $panelOpacity, in: 0...1).controlSize(.small).frame(width: 120)
-                        Text("\(Int(panelOpacity * 100))%")
+        VStack(alignment: .leading, spacing: 0) {
+            header("Sessions")
+            if model.sessions.isEmpty {
+                Text("No active sessions")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .padding(.vertical, 4)
+            } else {
+                ForEach(model.sessions) { session in
+                    HStack(spacing: 9) {
+                        Text(session.state.emoji).font(.system(size: 11))
+                        Text(session.displayName).font(.system(size: 13)).lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(formatElapsed(session.elapsed))
                             .font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary)
-                            .frame(width: 34, alignment: .trailing)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 8)
-                    .disabled(!model.showFloating)
-                }
-
-                group("Ignored projects", caption: "One path per line — never shown or notified.") {
-                    TextEditor(text: $ignoredProjects)
-                        .font(.system(size: 12, design: .monospaced))
-                        .scrollContentBackground(.hidden)
-                        .frame(height: 48)
-                        .padding(.horizontal, 8).padding(.vertical, 6)
-                        .onChange(of: ignoredProjects) { _, new in
-                            try? new.write(to: IgnoreList.defaultFileURL(), atomically: true, encoding: .utf8)
-                        }
-                }
-
-                group("Claude Code hooks", caption: "Merged into ~/.claude/settings.json (backed up); other hooks preserved.") {
-                    HStack(spacing: 8) {
-                        Button("Install") { runInstall() }
-                        Button("Uninstall") { runUninstall() }
-                        Spacer()
-                        if !hookStatus.isEmpty {
-                            Text(hookStatus).font(.system(size: 11)).foregroundStyle(.secondary)
-                        }
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .padding(.vertical, 3)
                 }
             }
-            .padding(16)
+
+            divider
+            header("Options")
+            toggleRow("Notifications", isOn: $notificationsEnabled)
+            toggleRow("Sound", isOn: $soundEnabled)
+            toggleRow("Completion sound", isOn: $completionSound)
+            toggleRow("Floating lights", isOn: $model.showFloating)
+            if model.showFloating {
+                HStack(spacing: 8) {
+                    Image(systemName: "circle.lefthalf.filled")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                    Slider(value: $panelOpacity, in: 0...1).controlSize(.mini)
+                    Text("\(Int(panelOpacity * 100))%")
+                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
+                        .frame(width: 32, alignment: .trailing)
+                }
+                .padding(.vertical, 3)
+            }
+            toggleRow("Start at login", isOn: $startAtLogin)
+                .onChange(of: startAtLogin) { _, on in
+                    do {
+                        if on { try SMAppService.mainApp.register() }
+                        else { try SMAppService.mainApp.unregister() }
+                    } catch { startAtLogin = !on }
+                }
+
+            divider
+            header("Ignored projects")
+            TextEditor(text: $ignoredProjects)
+                .font(.system(size: 11, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .frame(height: 38)
+                .padding(6)
+                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                .onChange(of: ignoredProjects) { _, new in
+                    try? new.write(to: IgnoreList.defaultFileURL(), atomically: true, encoding: .utf8)
+                }
+
+            divider
+            HStack(spacing: 8) {
+                Button("Install hooks") { runInstall() }
+                Button("Uninstall") { runUninstall() }
+                Spacer()
+                if !hookStatus.isEmpty {
+                    Text(hookStatus).font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.vertical, 2)
+
+            divider
+            HStack {
+                Text("v\(version)").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Spacer()
+                Button("Quit") { NSApplication.shared.terminate(nil) }
+                    .keyboardShortcut("q")
+            }
         }
-        .frame(width: 340, height: 520)
+        .padding(12)
+        .frame(width: 296)
+        .background(VisualEffectView())
+        .environment(\.colorScheme, .dark)
         .onAppear {
             ignoredProjects = (try? String(contentsOf: IgnoreList.defaultFileURL(), encoding: .utf8)) ?? ""
         }
     }
 
-    // MARK: - compact section styling
+    private var divider: some View { Divider().padding(.vertical, 6) }
 
-    private var rowDivider: some View {
-        Divider().padding(.leading, 12)
-    }
-
-    @ViewBuilder
-    private func group<Content: View>(_ title: String, caption: String? = nil,
-                                      @ViewBuilder _ content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased())
-                .font(.system(size: 10, weight: .semibold)).kerning(0.6)
-                .foregroundStyle(.secondary)
-            VStack(spacing: 0) { content() }
-                .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
-                .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(.primary.opacity(0.08)))
-            if let caption {
-                Text(caption)
-                    .font(.system(size: 10.5)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
+    private func header(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.system(size: 10, weight: .semibold)).kerning(0.6)
+            .foregroundStyle(.secondary)
+            .padding(.top, 2).padding(.bottom, 4)
     }
 
     private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
@@ -333,110 +335,20 @@ struct SettingsView: View {
             Spacer()
             Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch).controlSize(.small)
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
+        .padding(.vertical, 3)
     }
 
     private func runInstall() {
         do {
             try HookInstaller.defaultInstaller(helperSource: helperSourceURL()).install()
-            hookStatus = "Hooks installed."
-        } catch {
-            hookStatus = "Install failed: \(error)"
-        }
+            hookStatus = "Installed."
+        } catch { hookStatus = "Failed: \(error)" }
     }
 
     private func runUninstall() {
         do {
             try HookInstaller.defaultInstaller(helperSource: helperSourceURL()).uninstall()
-            hookStatus = "Hooks removed."
-        } catch {
-            hookStatus = "Uninstall failed: \(error)"
-        }
-    }
-}
-
-/// A normal AppKit window hosting the SwiftUI SettingsView. Created and shown directly
-/// (not via the SwiftUI Settings scene, which is unreliable to open from a menu-bar agent).
-@MainActor
-final class SettingsWindowController: NSObject, NSWindowDelegate {
-    private var window: NSWindow?
-
-    func show(model: AppModel) {
-        if window == nil {
-            let w = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 340, height: 520),
-                styleMask: [.titled, .closable], backing: .buffered, defer: false
-            )
-            w.title = "Settings"
-            w.contentView = NSHostingView(rootView: SettingsView(model: model))
-            w.isReleasedWhenClosed = false
-            w.center()
-            w.delegate = self
-            window = w
-        }
-        NSApp.setActivationPolicy(.regular)   // become focusable so the window comes forward
-        NSApp.activate(ignoringOtherApps: true)
-        window?.center()
-        window?.makeKeyAndOrderFront(nil)
-        window?.orderFrontRegardless()        // beat the current foreground app
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        NSApp.setActivationPolicy(.accessory)  // back to menu-bar agent, no Dock icon
-    }
-}
-
-struct DropdownView: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Claude Code — \(model.aggregate.label)")
-                .font(.headline)
-
-            Divider()
-
-            if model.sessions.isEmpty {
-                Text("No active sessions")
-                    .font(.callout).foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                VStack(spacing: 9) {
-                    ForEach(model.sessions) { session in
-                        HStack(spacing: 9) {
-                            Text(session.state.emoji).font(.system(size: 12))
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(session.displayName).font(.callout).lineLimit(1)
-                                Text(session.cwd ?? "")
-                                    .font(.caption).foregroundStyle(.secondary)
-                                    .lineLimit(1).truncationMode(.middle)
-                            }
-                            Spacer(minLength: 8)
-                            Text(formatElapsed(session.elapsed))
-                                .font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-
-            Divider()
-
-            HStack {
-                Text("Floating lights")
-                Spacer()
-                Toggle("", isOn: $model.showFloating)
-                    .labelsHidden().toggleStyle(.switch).controlSize(.small)
-            }
-
-            Divider()
-
-            HStack {
-                Button("Settings…") { model.showSettings() }
-                Spacer()
-                Button("Quit") { NSApplication.shared.terminate(nil) }
-            }
-        }
-        .padding(14)
-        .frame(width: 300)
+            hookStatus = "Removed."
+        } catch { hookStatus = "Failed: \(error)" }
     }
 }
