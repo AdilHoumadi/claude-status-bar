@@ -28,6 +28,48 @@ extension Color {
     })
 }
 
+/// User's appearance override for the app's panels. Applied per-window (not to NSApp) so the
+/// menu-bar icon keeps following the real menu bar.
+enum AppearanceMode: String, CaseIterable {
+    case system, light, dark
+
+    /// nil = follow the system appearance.
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: return nil
+        case .light: return NSAppearance(named: .aqua)
+        case .dark: return NSAppearance(named: .darkAqua)
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .system: return "System"
+        case .light: return "Light"
+        case .dark: return "Dark"
+        }
+    }
+
+    static var current: AppearanceMode {
+        AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "") ?? .system
+    }
+}
+
+/// Applies an explicit `NSAppearance` to the hosting window so a surface can be forced light or
+/// dark independent of the system (nil follows the system). Flipping the window appearance flips
+/// its vibrancy material, the adaptive `panelTint`, and SwiftUI's `.primary`/`.secondary` colors.
+struct WindowAppearance: NSViewRepresentable {
+    let appearance: NSAppearance?
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        DispatchQueue.main.async { v.window?.appearance = appearance }
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { nsView.window?.appearance = appearance }
+    }
+}
+
 private func lampColor(_ s: SessionState) -> Color {
     switch s {
     case .red: return Color(red: 1.0, green: 0.23, blue: 0.19)
@@ -187,7 +229,13 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             panel = p
             reposition(p)
         }
+        applyAppearance()
         panel?.orderFrontRegardless()
+    }
+
+    /// Force the floating window light/dark per the user's setting (nil = follow system).
+    func applyAppearance() {
+        panel?.appearance = AppearanceMode.current.nsAppearance
     }
 
     /// Resize the panel to fit `shown` lights (+ chip), keeping the top-right anchor. Called

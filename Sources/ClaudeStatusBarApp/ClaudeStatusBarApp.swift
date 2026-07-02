@@ -163,6 +163,9 @@ final class AppModel: ObservableObject {
         if showFloating { floating.show(model: self) }
     }
 
+    /// Re-apply the light/dark override to the floating window (dropdown handles itself).
+    func applyAppearance() { floating.applyAppearance() }
+
     func refresh() {
         vm.refresh()
         aggregate = vm.aggregate
@@ -227,6 +230,7 @@ struct DropdownView: View {
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
     @AppStorage("floatingMaxLights") private var floatingMaxLights: Double = 3
+    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @State private var startAtLogin = SMAppService.mainApp.status == .enabled
     @State private var ignoredProjects = ""
     @State private var hookStatus = ""
@@ -269,6 +273,17 @@ struct DropdownView: View {
             header("Options")
             toggleRow("Notifications", isOn: $notificationsEnabled)
             toggleRow("Sound", isOn: $soundEnabled)
+            // Force light/dark for both surfaces, or follow the system.
+            HStack(spacing: 8) {
+                Image(systemName: "circle.righthalf.filled")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                Picker("Appearance", selection: $appearanceMode) {
+                    ForEach(AppearanceMode.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+                .pickerStyle(.segmented).labelsHidden()
+            }
+            .padding(.vertical, 3)
+            .onChange(of: appearanceMode) { _, _ in model.applyAppearance() }
             // Opacity dims both this menu and the floating window, so it's always available.
             HStack(spacing: 8) {
                 Image(systemName: "circle.lefthalf.filled")
@@ -338,6 +353,7 @@ struct DropdownView: View {
                 Color.panelTint.opacity(panelOpacity * 0.7)   // same slider as the floating window
             }
         }
+        .background(WindowAppearance(appearance: appearanceMode.nsAppearance))   // force light/dark on this menu
         .onAppear {
             ignoredProjects = (try? String(contentsOf: IgnoreList.defaultFileURL(), encoding: .utf8)) ?? ""
         }
