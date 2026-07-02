@@ -38,8 +38,7 @@ public final class StatusViewModel {
                 id: record.sessionId,
                 state: record.state,
                 cwd: record.cwd,
-                elapsed: max(0, now.timeIntervalSince(record.stateSince)),
-                source: .claudeCode
+                elapsed: max(0, now.timeIntervalSince(record.stateSince))
             )
         }
 

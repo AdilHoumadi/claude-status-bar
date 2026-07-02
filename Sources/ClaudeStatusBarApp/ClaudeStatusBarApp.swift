@@ -241,11 +241,6 @@ struct DropdownView: View {
                         Text(formatElapsed(session.elapsed))
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(.secondary)
-                        Text(session.source.badge)
-                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(.primary.opacity(0.10), in: RoundedRectangle(cornerRadius: 4))
                     }
                     .padding(.vertical, 3)
                 }

@@ -69,5 +69,4 @@ func statusViewModelTests() -> TestSuite { ("StatusViewModelTests", { t in
     t.expect(ids.contains("hook1") && ids.contains("hook2"), "both hook sessions kept")
     t.expect(ids.contains("solo"), "hook-less desktop session kept")
     t.expect(!ids.contains("dupe"), "desktop dupe of a hook folder dropped")
-    t.expectEqual(vm3.sessions.first { $0.id == "solo" }?.source, .desktop)
 }) }

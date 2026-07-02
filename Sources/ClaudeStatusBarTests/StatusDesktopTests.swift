@@ -25,7 +25,6 @@ func desktopSessionSourceTests() -> TestSuite { ("DesktopSessionSourceTests", { 
     let byId = Dictionary(items.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
     t.expectEqual(byId["active"]?.state, .yellow)
     t.expectEqual(byId["active"]?.cwd, "/work/a")
-    t.expectEqual(byId["active"]?.source, .desktop)
     t.expectEqual(byId["idle"]?.state, .green)
     t.expect(byId["arch"] == nil, "archived session skipped")
     t.expect(byId["stale"] == nil, "stale session skipped")

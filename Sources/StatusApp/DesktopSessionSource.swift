@@ -48,8 +48,7 @@ public final class DesktopSessionSource {
                 id: m.id,
                 state: idle < activeWindow ? .yellow : .green,
                 cwd: m.cwd,
-                elapsed: max(0, idle),
-                source: .desktop
+                elapsed: max(0, idle)
             ))
         }
         return out
