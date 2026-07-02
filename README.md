@@ -1,4 +1,9 @@
-# Claude Status Bar
+# 🚦 Claude Status Bar
+
+![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white)
+![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)
+![Menu bar](https://img.shields.io/badge/menu%20bar-SwiftUI-1E90FF)
+![Telemetry](https://img.shields.io/badge/telemetry-none-2ecc71)
 
 An ambient status light for [Claude Code](https://claude.com/claude-code). A menu-bar
 dot and an optional floating glass panel show, at a glance, whether each session is
@@ -7,12 +12,14 @@ Code hooks, with desktop notifications on the transitions that matter.
 
 No network, no telemetry. Everything is local files under `~/.claude/`.
 
-## Requirements
+![Claude Status Bar — the floating panel and session list in light and dark mode](docs/hero.png)
+
+## 📋 Requirements
 
 - macOS 14 (Sonoma) or later
 - Swift toolchain (Xcode **or** Command Line Tools: `xcode-select --install`)
 
-## Install (CLI)
+## 🚀 Install (CLI)
 
 Everything installs from the terminal — no Xcode project, no App Store.
 
@@ -41,7 +48,7 @@ sessions already running won't light up until they restart.
 > from there. Don't also copy it to `/Applications` — a second copy with the same bundle id
 > shadows updates (the old one keeps launching) and is a pain to untangle. Pick one location.
 
-### Update
+### 🔄 Update
 
 ```bash
 git pull
@@ -51,7 +58,7 @@ git pull
 If an old instance is still running, quit it from the menu (or `killall ClaudeStatusBarApp`)
 before relaunching so the new build takes over.
 
-### Or grab a .dmg
+### 📦 Or grab a .dmg
 
 `./scripts/dmg.sh` builds `dist/ClaudeStatusBar.dmg` (drag-to-Applications). It's ad-hoc
 signed (not notarized), so on first launch **right-click the app → Open**, or run:
@@ -63,7 +70,7 @@ xattr -dr com.apple.quarantine /Applications/ClaudeStatusBar.app
 Then click the menu-bar dot → **Install hooks** (or run
 `~/.claude/statusbar/bin/claude-statusbar-hook --install`) to wire it into Claude Code.
 
-## Using it
+## 👀 Using it
 
 Everything lives in the menu-bar dropdown — click the dot to open it.
 
@@ -86,7 +93,7 @@ Everything lives in the menu-bar dropdown — click the dot to open it.
 CLI, IDE extensions, and Claude Desktop's Code / Cowork sessions are all covered — they run
 the Claude Code engine and fire the same hooks.
 
-## State model
+## 🚦 State model
 
 | Hook event | State |
 |---|---|
@@ -95,7 +102,7 @@ the Claude Code engine and fire the same hooks.
 | `Stop` | 🟢 done / idle |
 | `SessionStart` / `SessionEnd` | create / remove the session |
 
-## How it works
+## ⚙️ How it works
 
 ```
 Claude Code ──hook (sync)──▶ claude-statusbar-hook ──▶ ~/.claude/statusbar/<id>.json
@@ -107,21 +114,21 @@ Hooks are synchronous, fail-open (always exit 0), and called by absolute path �
 never block or fail a Claude Code turn. The installed helper lives at a stable path
 (`~/.claude/statusbar/bin/`) so app updates don't break the hooks.
 
-## Manage hooks from the CLI
+## 🪝 Manage hooks from the CLI
 
 ```bash
 ~/.claude/statusbar/bin/claude-statusbar-hook --install     # wire up (idempotent)
 ~/.claude/statusbar/bin/claude-statusbar-hook --uninstall   # remove ours; leaves others intact
 ```
 
-## Uninstall
+## 🧹 Uninstall
 
 ```bash
 ~/.claude/statusbar/bin/claude-statusbar-hook --uninstall
 rm -rf ~/Applications/ClaudeStatusBar.app ~/.claude/statusbar
 ```
 
-## Troubleshooting
+## 🩺 Troubleshooting
 
 - **No notifications** — approve them in System Settings → Notifications → ClaudeStatusBar.
   Notifications only fire from the bundled `.app` (not bare `swift run`).
@@ -133,7 +140,7 @@ rm -rf ~/Applications/ClaudeStatusBar.app ~/.claude/statusbar
   and delete the other (`sudo rm -rf /Applications/ClaudeStatusBar.app`), then toggle **Start
   at login** off/on to re-register.
 
-## Development
+## 🛠️ Development
 
 ```bash
 swift run ClaudeStatusBarTests   # full test suite (dependency-free harness)
@@ -145,7 +152,7 @@ Source is a SwiftPM package: `StatusCore` (state model), `StatusStore` (hook hel
 state files), `StatusApp` (view-model, notifications, floating selection),
 `StatusInstall` (settings.json installer), and the `ClaudeStatusBarApp` SwiftUI shell.
 
-## Distribution
+## 📤 Distribution
 
 The bundle is **ad-hoc signed** — fine for your own machine. Sharing it with other Macs
 requires a Developer ID certificate and notarization (an Apple Developer account).
