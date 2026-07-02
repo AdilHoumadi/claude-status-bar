@@ -90,16 +90,13 @@ func formatElapsed(_ t: TimeInterval) -> String {
 func currentNotificationSettings() -> NotificationSettings {
     let d = UserDefaults.standard
     func flag(_ key: String, _ def: Bool) -> Bool { d.object(forKey: key) as? Bool ?? def }
-    let notifyRed = flag("notifyOnRed", true)
-    let notifyYellow = flag("notifyOnYellow", false)
-    let notifyGreen = flag("notifyOnGreen", true)
+    let notificationsOn = flag("notificationsEnabled", true)
     let completion = flag("completionSound", true)
     let sound = flag("soundEnabled", true)
     let mutedCSV = d.string(forKey: "mutedProjects") ?? ""
     var states = Set<SessionState>()
-    if notifyRed { states.insert(.red) }
-    if notifyYellow { states.insert(.yellow) }
-    if notifyGreen || completion { states.insert(.green) }  // detect green for banner and/or chime
+    if notificationsOn { states.insert(.red); states.insert(.green) }  // notify on red + green
+    if completion { states.insert(.green) }                            // detect green for the chime
     let muted = Set(mutedCSV.split(separator: "\n").map(String.init).filter { !$0.isEmpty })
     return NotificationSettings(notifyStates: states, soundEnabled: sound, mutedProjects: muted)
 }
@@ -180,19 +177,18 @@ final class AppModel: ObservableObject {
         func flag(_ key: String, _ def: Bool) -> Bool { d.object(forKey: key) as? Bool ?? def }
         let notificationsOn = flag("notificationsEnabled", true)  // master switch
         let soundOn = flag("soundEnabled", true)                  // master switch
-        let bannerGreen = flag("notifyOnGreen", true)
         let completion = flag("completionSound", true)
 
-        // Always process (keeps transition tracking in sync); the master switches gate output.
+        // Always process (keeps transition tracking in sync); the switches gate output.
         for note in coordinator.process(sessions: vm.sessions, settings: settings, now: Date()) {
             switch note.kind {
-            case .needsYou, .started:
+            case .needsYou:
                 if notificationsOn { notifier.post(note, sound: soundOn) }
+            case .started:
+                break  // "running" notifications aren't exposed
             case .done:
                 if soundOn && completion { playCompletionSound() }
-                if notificationsOn && bannerGreen {
-                    notifier.post(note, sound: soundOn && !completion)
-                }
+                if notificationsOn { notifier.post(note, sound: soundOn && !completion) }
             }
         }
     }
@@ -233,9 +229,6 @@ func helperSourceURL() -> URL {
 struct SettingsView: View {
     @ObservedObject var model: AppModel
     @AppStorage("notificationsEnabled") private var notificationsEnabled = true
-    @AppStorage("notifyOnRed") private var notifyOnRed = true
-    @AppStorage("notifyOnYellow") private var notifyOnYellow = false
-    @AppStorage("notifyOnGreen") private var notifyOnGreen = true
     @AppStorage("soundEnabled") private var soundEnabled = true
     @AppStorage("completionSound") private var completionSound = true
     @AppStorage("mutedProjects") private var mutedProjects = ""
@@ -258,11 +251,12 @@ struct SettingsView: View {
                     }
             }
 
-            Section("Notifications") {
+            Section {
                 Toggle("Enable notifications", isOn: $notificationsEnabled)
-                Toggle("Waiting for me (red)", isOn: $notifyOnRed).disabled(!notificationsEnabled)
-                Toggle("Running (yellow)", isOn: $notifyOnYellow).disabled(!notificationsEnabled)
-                Toggle("Finished (green)", isOn: $notifyOnGreen).disabled(!notificationsEnabled)
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text("Notifies when a session needs you (red) or finishes (green).")
             }
 
             Section("Sound") {
