@@ -3,13 +3,12 @@ import Foundation
 /// The subset of a Claude Code hook's stdin JSON payload that the status bar cares about.
 ///
 /// Field names follow the hook contract: `session_id`, `hook_event_name`,
-/// `notification_type`, `cwd`, `transcript_path`.
+/// `notification_type`, `cwd`, `agent_id`. Unknown keys in the payload are ignored.
 public struct HookEvent: Codable, Sendable, Equatable {
     public let sessionId: String
     public let hookEventName: String
     public let notificationType: String?
     public let cwd: String?
-    public let transcriptPath: String?
     /// Present when the hook fires inside a subagent — the session is still working.
     public let agentId: String?
 
@@ -18,14 +17,12 @@ public struct HookEvent: Codable, Sendable, Equatable {
         hookEventName: String,
         notificationType: String? = nil,
         cwd: String? = nil,
-        transcriptPath: String? = nil,
         agentId: String? = nil
     ) {
         self.sessionId = sessionId
         self.hookEventName = hookEventName
         self.notificationType = notificationType
         self.cwd = cwd
-        self.transcriptPath = transcriptPath
         self.agentId = agentId
     }
 
@@ -34,7 +31,6 @@ public struct HookEvent: Codable, Sendable, Equatable {
         case hookEventName = "hook_event_name"
         case notificationType = "notification_type"
         case cwd
-        case transcriptPath = "transcript_path"
         case agentId = "agent_id"
     }
 }

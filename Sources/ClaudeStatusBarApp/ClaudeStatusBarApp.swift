@@ -60,24 +60,6 @@ func menuBarIcon(for active: SessionState) -> NSImage {
     return image
 }
 
-extension SessionState {
-    var emoji: String {
-        switch self {
-        case .red: return "🔴"
-        case .yellow: return "🟡"
-        case .green: return "🟢"
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .red: return "Waiting for you"
-        case .yellow: return "Running"
-        case .green: return "Idle"
-        }
-    }
-}
-
 func formatElapsed(_ t: TimeInterval) -> String {
     let s = Int(t)
     if s < 60 { return "\(s)s" }

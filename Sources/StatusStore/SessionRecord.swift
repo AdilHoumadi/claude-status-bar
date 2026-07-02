@@ -13,22 +13,19 @@ public struct SessionRecord: Codable, Sendable, Equatable {
     public var cwd: String?
     public var updatedAt: Date
     public var stateSince: Date
-    public var title: String?
 
     public init(
         sessionId: String,
         state: SessionState,
         cwd: String?,
         updatedAt: Date,
-        stateSince: Date,
-        title: String? = nil
+        stateSince: Date
     ) {
         self.sessionId = sessionId
         self.state = state
         self.cwd = cwd
         self.updatedAt = updatedAt
         self.stateSince = stateSince
-        self.title = title
     }
 
     enum CodingKeys: String, CodingKey {
@@ -37,6 +34,5 @@ public struct SessionRecord: Codable, Sendable, Equatable {
         case cwd
         case updatedAt = "updated_at"
         case stateSince = "state_since"
-        case title
     }
 }
