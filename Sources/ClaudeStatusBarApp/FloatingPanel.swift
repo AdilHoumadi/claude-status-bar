@@ -4,16 +4,28 @@ import StatusApp
 import StatusCore
 
 /// Bridges an `NSVisualEffectView` into SwiftUI so the panel is real macOS vibrancy
-/// glass (translucent, follows light/dark).
+/// glass (translucent, follows the system light/dark appearance).
 struct VisualEffectView: NSViewRepresentable {
+    var material: NSVisualEffectView.Material = .popover   // adapts to light/dark (unlike .hudWindow)
+
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
-        view.material = .hudWindow   // dark, premium frosted glass
+        view.material = material
         view.blendingMode = .behindWindow
         view.state = .active
         return view
     }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = material
+    }
+}
+
+extension Color {
+    /// Tints toward black in Dark Mode and white in Light Mode, so the opacity slider
+    /// *darkens* the glass in dark and *frosts* it in light — always readable, always native.
+    static let panelTint = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .black : .white
+    })
 }
 
 private func lampColor(_ s: SessionState) -> Color {
@@ -120,8 +132,8 @@ struct FloatingLightsView: View {
                                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                                 .foregroundStyle(.primary.opacity(0.75))
                                 .frame(width: 26, height: 53)
-                                .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 7))
-                                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.white.opacity(0.12), lineWidth: 0.5))
+                                .background(.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
+                                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.primary.opacity(0.14), lineWidth: 0.5))
                             Text("more")
                                 .font(.system(size: 8, weight: .regular, design: .monospaced))
                                 .foregroundStyle(.tertiary)
@@ -137,12 +149,11 @@ struct FloatingLightsView: View {
         .background {
             ZStack {
                 VisualEffectView()
-                Color.black.opacity(panelOpacity * 0.7)   // user-controlled glass depth
+                Color.panelTint.opacity(panelOpacity * 0.7)   // user-controlled glass depth, adapts to appearance
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.white.opacity(0.12), lineWidth: 1))
-        .environment(\.colorScheme, .dark)   // consistent dark panel, light text & glowing lamps
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.primary.opacity(0.14), lineWidth: 1))
     }
 }
 

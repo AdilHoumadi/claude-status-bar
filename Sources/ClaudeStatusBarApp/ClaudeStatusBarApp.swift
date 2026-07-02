@@ -259,7 +259,7 @@ struct DropdownView: View {
                             .font(.system(size: 8, weight: .semibold, design: .monospaced))
                             .foregroundStyle(.secondary)
                             .padding(.horizontal, 4).padding(.vertical, 1)
-                            .background(.white.opacity(0.10), in: RoundedRectangle(cornerRadius: 4))
+                            .background(.primary.opacity(0.10), in: RoundedRectangle(cornerRadius: 4))
                     }
                     .padding(.vertical, 3)
                 }
@@ -306,7 +306,7 @@ struct DropdownView: View {
                 .scrollContentBackground(.hidden)
                 .frame(height: 38)
                 .padding(6)
-                .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
+                .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
                 .onChange(of: ignoredProjects) { _, new in
                     try? new.write(to: IgnoreList.defaultFileURL(), atomically: true, encoding: .utf8)
                 }
@@ -334,11 +334,10 @@ struct DropdownView: View {
         .frame(width: 296)
         .background {
             ZStack {
-                VisualEffectView()
-                Color.black.opacity(panelOpacity * 0.7)   // same slider as the floating window
+                VisualEffectView(material: .menu)
+                Color.panelTint.opacity(panelOpacity * 0.7)   // same slider as the floating window
             }
         }
-        .environment(\.colorScheme, .dark)
         .onAppear {
             ignoredProjects = (try? String(contentsOf: IgnoreList.defaultFileURL(), encoding: .utf8)) ?? ""
         }
