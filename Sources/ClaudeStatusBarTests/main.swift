@@ -8,7 +8,6 @@ runSuites([
     ignoreListTests(),
     hookProcessorTests(),
     statusViewModelTests(),
-    desktopSessionSourceTests(),
     notificationCoordinatorTests(),
     settingsJsonMergeTests(),
     hookInstallerTests(),

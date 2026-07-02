@@ -133,10 +133,9 @@ final class AppModel: ObservableObject {
 
     init() {
         showFloating = UserDefaults.standard.bool(forKey: "showFloating")
-        vm = StatusViewModel(
-            store: StateStore(directory: StateStore.defaultDirectory()),
-            desktop: DesktopSessionSource()   // Cowork / Desktop Code tab (from host transcripts)
-        )
+        // Cowork / Desktop Code sessions run the Claude Code engine, so they fire the hooks
+        // like CLI/IDE — one store covers them all, and closed sessions drop off via SessionEnd.
+        vm = StatusViewModel(store: StateStore(directory: StateStore.defaultDirectory()))
         refresh()
         // Poll-only (G8): one 0.5s timer drives state, notifications, and elapsed display.
         timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
