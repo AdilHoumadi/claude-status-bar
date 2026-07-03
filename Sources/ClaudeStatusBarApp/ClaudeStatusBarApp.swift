@@ -301,6 +301,21 @@ struct DropdownView: View {
                     } catch { startAtLogin = !on }
                 }
 
+            if let u = model.usage {
+                divider
+                header("Usage")
+                let stale = u.isStale(now: Date(), maxAge: 900)
+                VStack(alignment: .leading, spacing: 7) {
+                    UsageBar(label: "5H USAGE", percent: u.fiveHourPercent ?? 0,
+                             resetsAt: u.fiveHourResetsAt, stale: stale)
+                    if let wk = u.sevenDayPercent {
+                        UsageBar(label: "WEEKLY", percent: wk,
+                                 resetsAt: u.sevenDayResetsAt, stale: stale)
+                    }
+                }
+                .padding(.bottom, 2)
+            }
+
             divider
             header("Ignored projects")
             TextEditor(text: $ignoredProjects)
