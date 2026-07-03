@@ -158,8 +158,9 @@ final class AppModel: ObservableObject {
         if showFloating {
             let maxLights = min(5, max(1, Int(UserDefaults.standard.object(forKey: "floatingMaxLights") as? Double ?? 3)))
             let sel = FloatingSelection.select(vm.sessions, max: maxLights)
-            let showUsage = UserDefaults.standard.bool(forKey: "showUsageBar") && usage != nil
-            floating.updateSize(shown: sel.shown.count, overflow: sel.overflow > 0, showUsage: showUsage)
+            let usageBars = (UserDefaults.standard.bool(forKey: "showUsageBar") && usage != nil)
+                ? 1 + ((usage?.sevenDayPercent != nil) ? 1 : 0) : 0
+            floating.updateSize(shown: sel.shown.count, overflow: sel.overflow > 0, usageBars: usageBars)
         }
 
         let settings = currentNotificationSettings()

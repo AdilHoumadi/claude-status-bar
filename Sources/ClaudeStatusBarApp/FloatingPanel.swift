@@ -133,17 +133,20 @@ struct MiniTrafficLight: View {
     }
 }
 
-/// Human reset countdown for a rate-limit window, e.g. "resets 4h57m" / "resets 42m".
+/// Human reset countdown, e.g. "resets 3d23h" (weekly) / "resets 4h57m" / "resets 42m".
 func formatUsageReset(_ resetsAt: Date, now: Date = Date()) -> String {
     let s = Int(resetsAt.timeIntervalSince(now))
     if s <= 0 { return "resetting" }
-    let h = s / 3600, m = (s % 3600) / 60
-    return h > 0 ? "resets \(h)h\(m)m" : "resets \(m)m"
+    let d = s / 86400, h = (s % 86400) / 3600, m = (s % 3600) / 60
+    if d > 0 { return "resets \(d)d\(h)h" }
+    if h > 0 { return "resets \(h)h\(m)m" }
+    return "resets \(m)m"
 }
 
 /// A colorful 5-hour usage loader: the full green→yellow→red gradient revealed up to `percent`,
 /// so both fill length and color convey how close to the limit you are.
 struct UsageBar: View {
+    let label: String
     let percent: Int
     let resetsAt: Date?
     let stale: Bool
@@ -160,7 +163,7 @@ struct UsageBar: View {
         let pct = Double(min(100, max(0, percent))) / 100
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
-                Text("5H USAGE").font(.system(size: 8, weight: .semibold)).kerning(0.5)
+                Text(label).font(.system(size: 8, weight: .semibold)).kerning(0.5)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(percent)%").font(.system(size: 9, weight: .semibold, design: .rounded))
@@ -240,10 +243,14 @@ struct FloatingLightsView: View {
             }
 
             if showUsageBar, let u = model.usage {
+                let stale = u.isStale(now: Date(), maxAge: 900)
                 Rectangle().fill(.primary.opacity(0.10)).frame(height: 1).padding(.top, 1)
-                UsageBar(percent: u.fiveHourPercent ?? 0,
-                         resetsAt: u.fiveHourResetsAt,
-                         stale: u.isStale(now: Date(), maxAge: 900))
+                UsageBar(label: "5H USAGE", percent: u.fiveHourPercent ?? 0,
+                         resetsAt: u.fiveHourResetsAt, stale: stale)
+                if let weekly = u.sevenDayPercent {
+                    UsageBar(label: "WEEKLY", percent: weekly,
+                             resetsAt: u.sevenDayResetsAt, stale: stale)
+                }
             }
         }
         // Width fits the lights actually shown (+ chip); floored so the header never clips.
@@ -272,9 +279,9 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         if panel == nil {
             let hosting = NSHostingView(rootView: FloatingLightsView(model: model))
             let sel = FloatingSelection.select(model.sessions, max: floatingMaxLights())
-            let usage = usageBarVisible(model)
-            let w = FloatingLayout.windowWidth(shown: sel.shown.count, overflow: sel.overflow > 0, showUsage: usage)
-            let h = FloatingLayout.windowHeight(showUsage: usage)
+            let bars = usageBars(model)
+            let w = FloatingLayout.windowWidth(shown: sel.shown.count, overflow: sel.overflow > 0, showUsage: bars > 0)
+            let h = FloatingLayout.windowHeight(usageBars: bars)
             // Window is sized to the content and resized on demand (see updateSize) so it stays
             // snug for the lights actually shown while never clipping.
             let p = NSPanel(
@@ -304,10 +311,10 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     /// Resize the panel to fit `shown` lights (+ chip) and the optional usage bar, keeping the
     /// top-right anchor. Called each refresh so it tracks the live count / settings.
-    func updateSize(shown: Int, overflow: Bool, showUsage: Bool) {
+    func updateSize(shown: Int, overflow: Bool, usageBars: Int) {
         guard let p = panel else { return }
-        let w = FloatingLayout.windowWidth(shown: shown, overflow: overflow, showUsage: showUsage)
-        let h = FloatingLayout.windowHeight(showUsage: showUsage)
+        let w = FloatingLayout.windowWidth(shown: shown, overflow: overflow, showUsage: usageBars > 0)
+        let h = FloatingLayout.windowHeight(usageBars: usageBars)
         if abs(p.frame.width - w) > 0.5 || abs(p.frame.height - h) > 0.5 {
             p.setContentSize(NSSize(width: w, height: h))
             reposition(p)   // setContentSize also fires windowDidResize -> reposition; belt & braces
@@ -319,8 +326,10 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         return min(5, max(1, Int(raw)))
     }
 
-    private func usageBarVisible(_ model: AppModel) -> Bool {
-        UserDefaults.standard.bool(forKey: "showUsageBar") && model.usage != nil
+    /// How many usage bars to show: 0 (off/none), 1 (5h), or 2 (5h + weekly).
+    private func usageBars(_ model: AppModel) -> Int {
+        guard UserDefaults.standard.bool(forKey: "showUsageBar"), let u = model.usage else { return 0 }
+        return 1 + (u.sevenDayPercent != nil ? 1 : 0)
     }
 
     func hide() {

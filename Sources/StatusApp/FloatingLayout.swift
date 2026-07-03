@@ -9,12 +9,14 @@ public enum FloatingLayout {
     public static let headerMin: CGFloat = 118  // min width so "CLAUDE CODE" never clips
     public static let padding: CGFloat = 12     // horizontal content padding (each side)
     public static let baseHeight: CGFloat = 120 // panel height with just the lights row
-    public static let usageBarExtra: CGFloat = 42 // extra height when the 5h usage bar shows
+    public static let usageBarFirst: CGFloat = 42 // extra height for the divider + first usage bar
+    public static let usageBarEach: CGFloat = 28  // extra height per additional usage bar (weekly)
     public static let usageMinContent: CGFloat = 178 // min content width so the usage row fits
 
-    /// Panel height, taller when the usage bar is shown at the bottom.
-    public static func windowHeight(showUsage: Bool) -> CGFloat {
-        baseHeight + (showUsage ? usageBarExtra : 0)
+    /// Panel height, taller for each usage bar shown at the bottom (0 = none, 1 = 5h, 2 = +weekly).
+    public static func windowHeight(usageBars: Int) -> CGFloat {
+        guard usageBars > 0 else { return baseHeight }
+        return baseHeight + usageBarFirst + CGFloat(usageBars - 1) * usageBarEach
     }
 
     /// Width of the content for `shown` lights (+ chip if there's overflow), floored so the

@@ -93,10 +93,11 @@ Everything lives in the menu-bar dropdown — click the dot to open it.
 CLI, IDE extensions, and Claude Desktop's Code / Cowork sessions are all covered — they run
 the Claude Code engine and fire the same hooks.
 
-## 📊 5-hour usage bar (optional)
+## 📊 Usage bars — 5-hour + weekly (optional)
 
-The floating panel can show a colourful **5-hour usage** loader at the bottom (green → yellow
-→ red as you approach the limit, with a reset countdown). Enable it in **Options → 5h usage bar**.
+The floating panel can show colourful **usage** loaders at the bottom — a **5-hour** bar and,
+when available, a **weekly** bar (green → yellow → red as you approach each limit, with a reset
+countdown). Enable them in **Options → 5h usage bar**.
 
 Claude Code only exposes the real rate-limit numbers to a **statusline** command (never to hooks
 or any file), so this is opt-in: point a statusline at the helper's `--usage-snapshot` mode, which

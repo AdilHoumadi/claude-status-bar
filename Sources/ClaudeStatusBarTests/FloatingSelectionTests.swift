@@ -71,7 +71,10 @@ func floatingLayoutTests() -> TestSuite { ("FloatingLayoutTests", { t in
     // wide case already exceeds the floor -> unchanged
     t.expectEqual(FloatingLayout.contentWidth(shown: 5, overflow: true, showUsage: true),
                   FloatingLayout.contentWidth(shown: 5, overflow: true))
-    // height grows with the usage bar
-    t.expectEqual(FloatingLayout.windowHeight(showUsage: true),
-                  FloatingLayout.windowHeight(showUsage: false) + FloatingLayout.usageBarExtra)
+    // height grows per usage bar: none < 5h only < 5h + weekly
+    t.expectEqual(FloatingLayout.windowHeight(usageBars: 0), FloatingLayout.baseHeight)
+    t.expectEqual(FloatingLayout.windowHeight(usageBars: 1),
+                  FloatingLayout.baseHeight + FloatingLayout.usageBarFirst)
+    t.expectEqual(FloatingLayout.windowHeight(usageBars: 2),
+                  FloatingLayout.baseHeight + FloatingLayout.usageBarFirst + FloatingLayout.usageBarEach)
 }) }
