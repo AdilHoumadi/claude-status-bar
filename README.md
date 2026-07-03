@@ -100,24 +100,26 @@ when available, a **weekly** bar (green → yellow → red as you approach each 
 countdown). Enable them in **Options → 5h usage bar**.
 
 Claude Code only exposes the real rate-limit numbers to a **statusline** command (never to hooks
-or any file), so this is opt-in: point a statusline at the helper's `--usage-snapshot` mode, which
-writes `~/.claude/statusbar/usage.json` for the app to read. No new software — it reuses the helper
+or any file — it's a native Claude Code feature, not a plugin), so this is opt-in: point the
+statusline at the helper's `--usage-snapshot` mode. It writes `~/.claude/statusbar/usage.json` for
+the app to read **and** prints a compact, colour-coded terminal line
+(`Opus 4.8 · claude-status-bar · ctx 40% · 5h 8% · wk 32%`). No new software — it reuses the helper
 you already have; works on Claude subscription plans (Pro/Max), not API/Bedrock/Vertex.
 
-If you have **no** statusline, set it to the helper directly (`settings.json`):
+Set it as your statusline (`settings.json`):
 
 ```json
 { "statusLine": { "type": "command",
   "command": "~/.claude/statusbar/bin/claude-statusbar-hook --usage-snapshot" } }
 ```
 
-If you **already** run a statusline (e.g. a HUD), wrap it so both run — the snapshot writer and
-your existing line:
+Claude Code allows one statusline. If you **already** run one (e.g. a HUD) and want to keep it,
+wrap both — the snapshot writer and your existing line:
 
 ```bash
 #!/bin/bash
 input=$(cat)
-printf '%s' "$input" | ~/.claude/statusbar/bin/claude-statusbar-hook --usage-snapshot
+printf '%s' "$input" | ~/.claude/statusbar/bin/claude-statusbar-hook --usage-snapshot >/dev/null
 printf '%s' "$input" | <your existing statusline command>
 ```
 

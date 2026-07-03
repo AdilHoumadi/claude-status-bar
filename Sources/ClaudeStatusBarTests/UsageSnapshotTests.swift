@@ -44,4 +44,21 @@ func usageSnapshotTests() -> TestSuite { ("UsageSnapshotTests", { t in
 
     // Missing file -> nil.
     t.expect(UsageStore.read(dir.appendingPathComponent("nope.json")) == nil, "missing file -> nil")
+
+    // Compact status line: model (context suffix stripped), repo, context %, 5h, weekly.
+    let full = """
+    {"model":{"display_name":"Opus 4.8 (1M context)"},"cwd":"/Users/x/claude-status-bar",
+     "context_window":{"used_percentage":40},
+     "rate_limits":{"five_hour":{"used_percentage":8},"seven_day":{"used_percentage":32}}}
+    """
+    let line = UsageStore.statusLine(from: Data(full.utf8))
+    t.expect(line.contains("Opus 4.8"), "model shown")
+    t.expect(!line.contains("context)"), "context suffix stripped")
+    t.expect(line.contains("claude-status-bar"), "repo (cwd basename) shown")
+    t.expect(line.contains("ctx 40%"), "context percent shown")
+    t.expect(line.contains("5h ") && line.contains("8%"), "5h shown")
+    t.expect(line.contains("wk ") && line.contains("32%"), "weekly shown")
+
+    // Empty / non-JSON stdin -> empty line, no crash.
+    t.expectEqual(UsageStore.statusLine(from: Data("nonsense".utf8)), "")
 }) }

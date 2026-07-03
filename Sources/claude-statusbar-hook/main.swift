@@ -42,14 +42,15 @@ if args.contains("--uninstall") {
     }
 }
 
-// Statusline snapshot: read the JSON Claude Code pipes to a statusline command on stdin and
-// persist the rate-limit windows to usage.json for the menu-bar app. Write-only and fail-open
-// (prints nothing, always exits 0), so it's safe as a standalone statusline or fed by a wrapper.
+// Statusline snapshot: read the JSON Claude Code pipes to a statusline command on stdin,
+// persist the rate-limit windows to usage.json for the menu-bar app, and print a compact
+// one-line status for the terminal. Fail-open (always exits 0).
 if args.contains("--usage-snapshot") {
     let data = FileHandle.standardInput.readDataToEndOfFile()
     if let snapshot = UsageStore.fromStatuslineStdin(data, now: Date()) {
         try? UsageStore.write(snapshot)
     }
+    print(UsageStore.statusLine(from: data))
     exit(0)
 }
 

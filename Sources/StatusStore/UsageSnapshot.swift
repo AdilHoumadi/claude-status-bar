@@ -79,7 +79,53 @@ public enum UsageStore {
         return (try? JSONSerialization.data(withJSONObject: out, options: [.prettyPrinted, .sortedKeys])) ?? Data()
     }
 
+    /// A compact one-line status for the terminal when this binary is used as the statusline,
+    /// e.g. "Opus 4.8 · claude-status-bar · ctx 40% · 5h 8% · wk 32%" (5h/wk coloured by
+    /// threshold). Segments are omitted when their data is absent.
+    public static func statusLine(from data: Data) -> String {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return "" }
+        var parts: [String] = []
+        if let name = (obj["model"] as? [String: Any])?["display_name"] as? String {
+            parts.append(stripContextSuffix(name))
+        }
+        if let cwd = obj["cwd"] as? String, !cwd.isEmpty {
+            parts.append((cwd as NSString).lastPathComponent)
+        }
+        if let ctx = pct((obj["context_window"] as? [String: Any])?["used_percentage"]) {
+            parts.append("ctx \(ctx)%")
+        }
+        if let rl = obj["rate_limits"] as? [String: Any] {
+            if let p = pct((rl["five_hour"] as? [String: Any])?["used_percentage"]) {
+                parts.append("5h " + colored("\(p)%", p))
+            }
+            if let p = pct((rl["seven_day"] as? [String: Any])?["used_percentage"]) {
+                parts.append("wk " + colored("\(p)%", p))
+            }
+        }
+        return parts.joined(separator: "\u{1B}[2m · \u{1B}[0m")   // dim separators
+    }
+
     // MARK: - parsing helpers
+
+    private static func pct(_ raw: Any?) -> Int? {
+        guard let n = raw as? NSNumber else { return nil }
+        return Int(min(100, max(0, n.doubleValue)).rounded())
+    }
+
+    /// ANSI colour by the same thresholds as the bar: green <75, yellow <90, red ≥90.
+    private static func colored(_ s: String, _ pct: Int) -> String {
+        let code = pct >= 90 ? "31" : (pct >= 75 ? "33" : "32")
+        return "\u{1B}[\(code)m\(s)\u{1B}[0m"
+    }
+
+    /// Drop a trailing "(… context …)" suffix, e.g. "Opus 4.8 (1M context)" → "Opus 4.8".
+    private static func stripContextSuffix(_ name: String) -> String {
+        if let r = name.range(of: #"\s*\([^)]*context[^)]*\)"#,
+                              options: [.regularExpression, .caseInsensitive]) {
+            return String(name[..<r.lowerBound]).trimmingCharacters(in: .whitespaces)
+        }
+        return name.trimmingCharacters(in: .whitespaces)
+    }
 
     private static func window(_ raw: Any?) -> (Int?, Date?) {
         guard let w = raw as? [String: Any] else { return (nil, nil) }
