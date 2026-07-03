@@ -119,6 +119,7 @@ final class UserNotifier: Notifier {
 final class AppModel: ObservableObject {
     @Published var aggregate: SessionState = .green
     @Published var sessions: [SessionViewItem] = []
+    @Published var usage: UsageSnapshot?   // 5h/weekly rate-limit snapshot (from a statusline)
     @Published var showFloating: Bool {
         didSet {
             UserDefaults.standard.set(showFloating, forKey: "showFloating")
@@ -151,12 +152,14 @@ final class AppModel: ObservableObject {
         vm.refresh()
         aggregate = vm.aggregate
         sessions = vm.sessions
+        usage = UsageStore.read()   // nil until a statusline writes usage.json
 
-        // Keep the floating panel's width in step with the live session count + max-lights setting.
+        // Keep the floating panel's size in step with the live session count + settings.
         if showFloating {
             let maxLights = min(5, max(1, Int(UserDefaults.standard.object(forKey: "floatingMaxLights") as? Double ?? 3)))
             let sel = FloatingSelection.select(vm.sessions, max: maxLights)
-            floating.updateSize(shown: sel.shown.count, overflow: sel.overflow > 0)
+            let showUsage = UserDefaults.standard.bool(forKey: "showUsageBar") && usage != nil
+            floating.updateSize(shown: sel.shown.count, overflow: sel.overflow > 0, showUsage: showUsage)
         }
 
         let settings = currentNotificationSettings()
@@ -212,6 +215,7 @@ struct DropdownView: View {
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
     @AppStorage("floatingMaxLights") private var floatingMaxLights: Double = 3
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
+    @AppStorage("showUsageBar") private var showUsageBar = false
     @State private var startAtLogin = SMAppService.mainApp.status == .enabled
     @State private var ignoredProjects = ""
     @State private var hookStatus = ""
@@ -281,6 +285,12 @@ struct DropdownView: View {
                         .frame(width: 44, alignment: .trailing)
                 }
                 .padding(.vertical, 3)
+                toggleRow("5h usage bar", isOn: $showUsageBar)
+                if showUsageBar && model.usage == nil {
+                    Text("waiting for a statusline snapshot — see README")
+                        .font(.system(size: 10)).foregroundStyle(.tertiary)
+                        .padding(.leading, 2).padding(.bottom, 2)
+                }
             }
             toggleRow("Start at login", isOn: $startAtLogin)
                 .onChange(of: startAtLogin) { _, on in

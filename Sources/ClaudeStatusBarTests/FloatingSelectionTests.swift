@@ -64,4 +64,14 @@ func floatingLayoutTests() -> TestSuite { ("FloatingLayoutTests", { t in
     // window width = content + padding both sides
     t.expectEqual(FloatingLayout.windowWidth(shown: 3, overflow: true),
                   FloatingLayout.contentWidth(shown: 3, overflow: true) + FloatingLayout.padding * 2)
+
+    // usage bar floors the width so its row doesn't truncate (narrow 1-light case)
+    t.expectEqual(FloatingLayout.contentWidth(shown: 1, overflow: false, showUsage: true),
+                  FloatingLayout.usageMinContent)
+    // wide case already exceeds the floor -> unchanged
+    t.expectEqual(FloatingLayout.contentWidth(shown: 5, overflow: true, showUsage: true),
+                  FloatingLayout.contentWidth(shown: 5, overflow: true))
+    // height grows with the usage bar
+    t.expectEqual(FloatingLayout.windowHeight(showUsage: true),
+                  FloatingLayout.windowHeight(showUsage: false) + FloatingLayout.usageBarExtra)
 }) }

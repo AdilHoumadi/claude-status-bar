@@ -93,6 +93,36 @@ Everything lives in the menu-bar dropdown — click the dot to open it.
 CLI, IDE extensions, and Claude Desktop's Code / Cowork sessions are all covered — they run
 the Claude Code engine and fire the same hooks.
 
+## 📊 5-hour usage bar (optional)
+
+The floating panel can show a colourful **5-hour usage** loader at the bottom (green → yellow
+→ red as you approach the limit, with a reset countdown). Enable it in **Options → 5h usage bar**.
+
+Claude Code only exposes the real rate-limit numbers to a **statusline** command (never to hooks
+or any file), so this is opt-in: point a statusline at the helper's `--usage-snapshot` mode, which
+writes `~/.claude/statusbar/usage.json` for the app to read. No new software — it reuses the helper
+you already have; works on Claude subscription plans (Pro/Max), not API/Bedrock/Vertex.
+
+If you have **no** statusline, set it to the helper directly (`settings.json`):
+
+```json
+{ "statusLine": { "type": "command",
+  "command": "~/.claude/statusbar/bin/claude-statusbar-hook --usage-snapshot" } }
+```
+
+If you **already** run a statusline (e.g. a HUD), wrap it so both run — the snapshot writer and
+your existing line:
+
+```bash
+#!/bin/bash
+input=$(cat)
+printf '%s' "$input" | ~/.claude/statusbar/bin/claude-statusbar-hook --usage-snapshot
+printf '%s' "$input" | <your existing statusline command>
+```
+
+Until a snapshot exists the bar stays hidden (no fake data). The number matches Claude's own
+`/usage` because it *is* Claude's number.
+
 ## 🚦 State model
 
 | Hook event | State |

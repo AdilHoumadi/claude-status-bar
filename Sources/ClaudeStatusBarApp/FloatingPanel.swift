@@ -133,6 +133,58 @@ struct MiniTrafficLight: View {
     }
 }
 
+/// Human reset countdown for a rate-limit window, e.g. "resets 4h57m" / "resets 42m".
+func formatUsageReset(_ resetsAt: Date, now: Date = Date()) -> String {
+    let s = Int(resetsAt.timeIntervalSince(now))
+    if s <= 0 { return "resetting" }
+    let h = s / 3600, m = (s % 3600) / 60
+    return h > 0 ? "resets \(h)h\(m)m" : "resets \(m)m"
+}
+
+/// A colorful 5-hour usage loader: the full green→yellow→red gradient revealed up to `percent`,
+/// so both fill length and color convey how close to the limit you are.
+struct UsageBar: View {
+    let percent: Int
+    let resetsAt: Date?
+    let stale: Bool
+
+    private let gradient = LinearGradient(colors: [
+        Color(red: 0.19, green: 0.82, blue: 0.35),  // green
+        Color(red: 0.55, green: 0.85, blue: 0.20),
+        Color(red: 1.0,  green: 0.80, blue: 0.10),  // yellow
+        Color(red: 1.0,  green: 0.55, blue: 0.10),  // orange
+        Color(red: 1.0,  green: 0.23, blue: 0.19),  // red
+    ], startPoint: .leading, endPoint: .trailing)
+
+    var body: some View {
+        let pct = Double(min(100, max(0, percent))) / 100
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 6) {
+                Text("5H USAGE").font(.system(size: 8, weight: .semibold)).kerning(0.5)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(percent)%").font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.primary.opacity(0.85))
+                if let r = resetsAt {
+                    Text("· \(formatUsageReset(r))").font(.system(size: 8, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            GeometryReader { g in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.primary.opacity(0.12))
+                    gradient
+                        .frame(width: g.size.width)
+                        .mask(Capsule().frame(width: max(6, g.size.width * pct))
+                                       .frame(maxWidth: .infinity, alignment: .leading))
+                }
+            }
+            .frame(height: 7)
+        }
+        .opacity(stale ? 0.45 : 1)   // dim when the snapshot is old
+    }
+}
+
 /// The floating panel's content: up to five traffic-lights worst-first, then a +N chip.
 struct FloatingLightsView: View {
     @ObservedObject var model: AppModel
@@ -140,11 +192,14 @@ struct FloatingLightsView: View {
     @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
     // How many lights to show before collapsing the rest into the +N chip (1–5).
     @AppStorage("floatingMaxLights") private var floatingMaxLights: Double = 3
+    // Show the 5-hour usage bar at the bottom (only when a usage snapshot exists).
+    @AppStorage("showUsageBar") private var showUsageBar = false
 
     var body: some View {
         let selection = FloatingSelection.select(model.sessions, max: Int(floatingMaxLights))
+        let usageVisible = showUsageBar && model.usage != nil
         let contentWidth = FloatingLayout.contentWidth(
-            shown: selection.shown.count, overflow: selection.overflow > 0)
+            shown: selection.shown.count, overflow: selection.overflow > 0, showUsage: usageVisible)
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
                 Text("Claude Code")
@@ -183,6 +238,13 @@ struct FloatingLightsView: View {
                     }
                 }
             }
+
+            if showUsageBar, let u = model.usage {
+                Rectangle().fill(.primary.opacity(0.10)).frame(height: 1).padding(.top, 1)
+                UsageBar(percent: u.fiveHourPercent ?? 0,
+                         resetsAt: u.fiveHourResetsAt,
+                         stale: u.isStale(now: Date(), maxAge: 900))
+            }
         }
         // Width fits the lights actually shown (+ chip); floored so the header never clips.
         .frame(width: contentWidth, alignment: .leading)
@@ -210,11 +272,13 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         if panel == nil {
             let hosting = NSHostingView(rootView: FloatingLightsView(model: model))
             let sel = FloatingSelection.select(model.sessions, max: floatingMaxLights())
-            let w = FloatingLayout.windowWidth(shown: sel.shown.count, overflow: sel.overflow > 0)
+            let usage = usageBarVisible(model)
+            let w = FloatingLayout.windowWidth(shown: sel.shown.count, overflow: sel.overflow > 0, showUsage: usage)
+            let h = FloatingLayout.windowHeight(showUsage: usage)
             // Window is sized to the content and resized on demand (see updateSize) so it stays
             // snug for the lights actually shown while never clipping.
             let p = NSPanel(
-                contentRect: NSRect(x: 0, y: 0, width: w, height: FloatingLayout.height),
+                contentRect: NSRect(x: 0, y: 0, width: w, height: h),
                 styleMask: [.nonactivatingPanel, .borderless],
                 backing: .buffered, defer: false
             )
@@ -238,13 +302,14 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         panel?.appearance = AppearanceMode.current.nsAppearance
     }
 
-    /// Resize the panel to fit `shown` lights (+ chip), keeping the top-right anchor. Called
-    /// each refresh so the width tracks the live session count and the max-lights setting.
-    func updateSize(shown: Int, overflow: Bool) {
+    /// Resize the panel to fit `shown` lights (+ chip) and the optional usage bar, keeping the
+    /// top-right anchor. Called each refresh so it tracks the live count / settings.
+    func updateSize(shown: Int, overflow: Bool, showUsage: Bool) {
         guard let p = panel else { return }
-        let w = FloatingLayout.windowWidth(shown: shown, overflow: overflow)
-        if abs(p.frame.width - w) > 0.5 {
-            p.setContentSize(NSSize(width: w, height: FloatingLayout.height))
+        let w = FloatingLayout.windowWidth(shown: shown, overflow: overflow, showUsage: showUsage)
+        let h = FloatingLayout.windowHeight(showUsage: showUsage)
+        if abs(p.frame.width - w) > 0.5 || abs(p.frame.height - h) > 0.5 {
+            p.setContentSize(NSSize(width: w, height: h))
             reposition(p)   // setContentSize also fires windowDidResize -> reposition; belt & braces
         }
     }
@@ -252,6 +317,10 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private func floatingMaxLights() -> Int {
         let raw = UserDefaults.standard.object(forKey: "floatingMaxLights") as? Double ?? 3
         return min(5, max(1, Int(raw)))
+    }
+
+    private func usageBarVisible(_ model: AppModel) -> Bool {
+        UserDefaults.standard.bool(forKey: "showUsageBar") && model.usage != nil
     }
 
     func hide() {

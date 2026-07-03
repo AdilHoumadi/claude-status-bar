@@ -13,4 +13,5 @@ runSuites([
     hookInstallerTests(),
     floatingSelectionTests(),
     floatingLayoutTests(),
+    usageSnapshotTests(),
 ])
