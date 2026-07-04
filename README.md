@@ -95,9 +95,12 @@ the Claude Code engine and fire the same hooks.
 
 ## 📊 Usage bars — 5-hour + weekly (optional)
 
-The floating panel can show colourful **usage** loaders at the bottom — a **5-hour** bar and,
-when available, a **weekly** bar (green → yellow → red as you approach each limit, with a reset
-countdown). Enable them in **Options → 5h usage bar**.
+The floating panel (and the dropdown menu) can show colourful **usage** loaders — a **5-hour**
+bar and, when available, a **weekly** bar (green → yellow → red as you approach each limit, with
+a reset countdown). Enable the floating bars in **Options → 5h usage bar**; the dropdown shows
+them automatically whenever usage data exists.
+
+![Usage bars in light and dark mode](docs/usage.png)
 
 Claude Code only exposes the real rate-limit numbers to a **statusline** command (never to hooks
 or any file — it's a native Claude Code feature, not a plugin), so this is opt-in: point the
