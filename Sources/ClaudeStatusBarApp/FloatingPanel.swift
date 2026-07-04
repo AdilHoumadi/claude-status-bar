@@ -188,6 +188,27 @@ struct UsageBar: View {
     }
 }
 
+/// A subtle close control for the panel header: hides the floating panel (same effect as
+/// flipping the dropdown's "Floating lights" switch off). Dim by default, brightens on hover
+/// so it stays quiet until you reach for it.
+struct PanelCloseButton: View {
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 7.5, weight: .bold))
+                .foregroundStyle(.primary.opacity(hovering ? 0.9 : 0.5))
+                .frame(width: 15, height: 15)
+                .background(.primary.opacity(hovering ? 0.16 : 0.08), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Hide floating panel")
+    }
+}
+
 /// The floating panel's content: up to five traffic-lights worst-first, then a +N chip.
 struct FloatingLightsView: View {
     @ObservedObject var model: AppModel
@@ -216,6 +237,7 @@ struct FloatingLightsView: View {
                         .font(.system(size: 10, weight: .medium, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
+                PanelCloseButton { model.showFloating = false }
             }
 
             if selection.shown.isEmpty {
