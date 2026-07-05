@@ -6,7 +6,7 @@ public enum FloatingLayout {
     public static let cell: CGFloat = 46        // one traffic-light cell (label) width
     public static let gap: CGFloat = 4          // spacing between cells
     public static let chip: CGFloat = 26        // the +N overflow chip width
-    public static let headerMin: CGFloat = 118  // min width so "CLAUDE CODE" never clips
+    public static let headerMin: CGFloat = 132  // min width so "CLAUDE CODE" + close button never clip
     public static let padding: CGFloat = 12     // horizontal content padding (each side)
     public static let baseHeight: CGFloat = 120 // panel height with just the lights row
     public static let usageBarFirst: CGFloat = 42 // extra height for the divider + first usage bar
