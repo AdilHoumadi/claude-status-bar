@@ -14,4 +14,5 @@ runSuites([
     floatingSelectionTests(),
     floatingLayoutTests(),
     usageSnapshotTests(),
+    directoryWatcherTests(),
 ])

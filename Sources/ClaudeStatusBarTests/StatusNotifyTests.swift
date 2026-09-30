@@ -5,7 +5,7 @@ import TestSupport
 
 func notificationCoordinatorTests() -> TestSuite { ("NotificationCoordinatorTests", { t in
     func item(_ id: String, _ state: SessionState, cwd: String? = "/work/app") -> SessionViewItem {
-        SessionViewItem(id: id, state: state, cwd: cwd, elapsed: 0)
+        SessionViewItem(id: id, state: state, cwd: cwd, stateSince: Date(timeIntervalSince1970: 0))
     }
     func at(_ s: TimeInterval) -> Date { Date(timeIntervalSince1970: s) }
 

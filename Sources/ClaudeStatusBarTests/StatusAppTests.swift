@@ -17,8 +17,9 @@ func statusViewModelTests() -> TestSuite { ("StatusViewModelTests", { t in
     try? store.write(SessionRecord(sessionId: "c", state: .yellow, cwd: "/work/gamma",
                                    updatedAt: now, stateSince: Date(timeIntervalSince1970: 9_900)))
 
-    let vm = StatusViewModel(store: store, ttl: 1800, clock: { now })
-    vm.refresh()
+    var clockNow = now
+    let vm = StatusViewModel(store: store, ttl: 1800, clock: { clockNow })
+    t.expect(vm.refresh(), "first refresh reports a change")
 
     // worst-state-wins aggregate
     t.expectEqual(vm.aggregate, .red)
@@ -27,9 +28,20 @@ func statusViewModelTests() -> TestSuite { ("StatusViewModelTests", { t in
     t.expectEqual(vm.sessions.map(\.state), [.red, .yellow, .green])
     // elapsed derived from stateSince (not updatedAt)
     let red = vm.sessions.first { $0.id == "b" }
-    t.expectEqual(red?.elapsed, 500)        // 10000 - 9500
+    t.expectEqual(red?.elapsed(at: now), 500)        // 10000 - 9500
     t.expectEqual(red?.cwd, "/work/beta")
     t.expectEqual(red?.displayName, "beta")
+
+    // time passing alone is not a change (elapsed is derived at render time)
+    clockNow = Date(timeIntervalSince1970: 10_060)
+    t.expect(!vm.refresh(), "unchanged store reports no change as time passes")
+    t.expectEqual(vm.sessions.count, 3)
+
+    // a state change on disk is a change
+    try? store.write(SessionRecord(sessionId: "c", state: .green, cwd: "/work/gamma",
+                                   updatedAt: clockNow, stateSince: clockNow))
+    t.expect(vm.refresh(), "state change reports a change")
+    t.expectEqual(vm.sessions.map(\.state), [.red, .green, .green])
 
     // stale sessions reaped on refresh
     let later = Date(timeIntervalSince1970: 15_000) // 5000s after updatedAt; ttl 1800
