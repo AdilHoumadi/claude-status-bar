@@ -1,10 +1,11 @@
+import Foundation
 import StatusApp
 import StatusCore
 import TestSupport
 
 func floatingSelectionTests() -> TestSuite { ("FloatingSelectionTests", { t in
     func item(_ id: String, _ s: SessionState) -> SessionViewItem {
-        SessionViewItem(id: id, state: s, cwd: nil, elapsed: 0)
+        SessionViewItem(id: id, state: s, cwd: nil, stateSince: Date(timeIntervalSince1970: 0))
     }
 
     // 7 sessions, cap 5: shows 5 worst-first, overflow 2

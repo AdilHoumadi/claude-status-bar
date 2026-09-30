@@ -58,15 +58,40 @@ enum AppearanceMode: String, CaseIterable {
 /// Applies an explicit `NSAppearance` to the hosting window so a surface can be forced light or
 /// dark independent of the system (nil follows the system). Flipping the window appearance flips
 /// its vibrancy material, the adaptive `panelTint`, and SwiftUI's `.primary`/`.secondary` colors.
+///
+/// Only writes when the value differs: setting `window.appearance` invalidates the hosting
+/// view, which calls `updateNSView` again — unconditional writes turned that into a layout
+/// loop that pinned the main thread at 100% CPU.
 struct WindowAppearance: NSViewRepresentable {
     let appearance: NSAppearance?
-    func makeNSView(context: Context) -> NSView {
-        let v = NSView()
-        DispatchQueue.main.async { v.window?.appearance = appearance }
-        return v
+
+    final class ApplyingView: NSView {
+        var target: NSAppearance? { didSet { applyDeferred() } }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            applyDeferred()
+        }
+
+        /// Deferred so the window isn't mutated mid SwiftUI update pass.
+        private func applyDeferred() {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let window = self.window,
+                      window.appearance?.name != self.target?.name else { return }
+                window.appearance = self.target
+            }
+        }
     }
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async { nsView.window?.appearance = appearance }
+
+    func makeNSView(context: Context) -> ApplyingView {
+        let view = ApplyingView()
+        view.target = appearance
+        return view
+    }
+
+    func updateNSView(_ nsView: ApplyingView, context: Context) {
+        guard nsView.target?.name != appearance?.name else { return }
+        nsView.target = appearance
     }
 }
 
@@ -116,9 +141,12 @@ struct MiniTrafficLight: View {
                     .font(.system(size: 9, weight: .medium))
                     .lineLimit(1).truncationMode(.tail)
                     .foregroundStyle(.primary.opacity(0.92))
-                Text(compactElapsed(session.elapsed))
-                    .font(.system(size: 8, weight: .regular, design: .monospaced))
-                    .foregroundStyle(.tertiary)
+                // Only this label ticks; the lamps re-render only on a state change.
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text(compactElapsed(session.elapsed(at: context.date)))
+                        .font(.system(size: 8, weight: .regular, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                }
             }
             .frame(width: 46)
         }
@@ -149,7 +177,7 @@ struct UsageBar: View {
     let label: String
     let percent: Int
     let resetsAt: Date?
-    let stale: Bool
+    let updatedAt: Date   // snapshot time; the bar dims once it's older than 15 minutes
 
     private let gradient = LinearGradient(colors: [
         Color(red: 0.19, green: 0.82, blue: 0.35),  // green
@@ -160,8 +188,16 @@ struct UsageBar: View {
     ], startPoint: .leading, endPoint: .trailing)
 
     var body: some View {
+        // Reset countdown and staleness are minute-granular: re-render once a minute, not per tick.
+        TimelineView(.everyMinute) { context in
+            content(now: context.date)
+        }
+    }
+
+    private func content(now: Date) -> some View {
         let pct = Double(min(100, max(0, percent))) / 100
-        VStack(alignment: .leading, spacing: 4) {
+        let stale = now.timeIntervalSince(updatedAt) > 900
+        return VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(label).font(.system(size: 8, weight: .semibold)).kerning(0.5)
                     .foregroundStyle(.secondary)
@@ -169,7 +205,7 @@ struct UsageBar: View {
                 Text("\(percent)%").font(.system(size: 9, weight: .semibold, design: .rounded))
                     .foregroundStyle(.primary.opacity(0.85))
                 if let r = resetsAt {
-                    Text("· \(formatUsageReset(r))").font(.system(size: 8, design: .monospaced))
+                    Text("· \(formatUsageReset(r, now: now))").font(.system(size: 8, design: .monospaced))
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -265,13 +301,12 @@ struct FloatingLightsView: View {
             }
 
             if showUsageBar, let u = model.usage {
-                let stale = u.isStale(now: Date(), maxAge: 900)
                 Rectangle().fill(.primary.opacity(0.10)).frame(height: 1).padding(.top, 1)
                 UsageBar(label: "5H USAGE", percent: u.fiveHourPercent ?? 0,
-                         resetsAt: u.fiveHourResetsAt, stale: stale)
+                         resetsAt: u.fiveHourResetsAt, updatedAt: u.updatedAt)
                 if let weekly = u.sevenDayPercent {
                     UsageBar(label: "WEEKLY", percent: weekly,
-                             resetsAt: u.sevenDayResetsAt, stale: stale)
+                             resetsAt: u.sevenDayResetsAt, updatedAt: u.updatedAt)
                 }
             }
         }

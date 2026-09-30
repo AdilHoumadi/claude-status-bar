@@ -4,7 +4,7 @@ import StatusStore
 
 /// Polls the hook-driven state store (CLI / IDE / Claude Desktop Cowork all fire the hooks),
 /// reaps stale sessions, applies the ignore list, and exposes the aggregate light plus the
-/// per-session list. Clock is injected for testable elapsed.
+/// per-session list. Clock is injected for testable reaping.
 ///
 /// Note: Desktop Cowork sessions run the Claude Code engine, so they fire the same hooks
 /// (including SessionEnd on close) — no separate transcript source is needed, and closed
@@ -30,17 +30,25 @@ public final class StatusViewModel {
         self.clock = clock
     }
 
-    public func refresh() {
+    /// Re-reads the store. Returns true when the aggregate or the session list changed, so
+    /// callers only republish (and re-render) on a real change.
+    @discardableResult
+    public func refresh() -> Bool {
         let now = clock()
 
-        store.reap(ttl: ttl, now: now)
-        var all = store.readAll().map { record in
-            SessionViewItem(
+        // One directory read per refresh: reap stale records from it instead of re-reading.
+        var all: [SessionViewItem] = []
+        for record in store.readAll() {
+            if now.timeIntervalSince(record.updatedAt) > ttl {
+                store.delete(record.sessionId)
+                continue
+            }
+            all.append(SessionViewItem(
                 id: record.sessionId,
                 state: record.state,
                 cwd: record.cwd,
-                elapsed: max(0, now.timeIntervalSince(record.stateSince))
-            )
+                stateSince: record.stateSince
+            ))
         }
 
         // The hook helper already skips ignored cwds at write time; re-filter here so a
@@ -52,7 +60,14 @@ public final class StatusViewModel {
             }
         }
 
-        aggregate = SessionState.aggregate(all.map(\.state))
-        sessions = all.sorted { $0.state.priority > $1.state.priority }  // worst-first
+        let newAggregate = SessionState.aggregate(all.map(\.state))
+        // Worst-first; ties by id so the order is stable and equal lists compare equal.
+        let newSessions = all.sorted {
+            $0.state.priority != $1.state.priority ? $0.state.priority > $1.state.priority : $0.id < $1.id
+        }
+        guard newAggregate != aggregate || newSessions != sessions else { return false }
+        aggregate = newAggregate
+        sessions = newSessions
+        return true
     }
 }

@@ -115,11 +115,25 @@ final class UserNotifier: Notifier {
     }
 }
 
+/// The three menu-bar glyphs per appearance, drawn once instead of on every body evaluation.
+@MainActor
+private var menuBarIconCache: [String: NSImage] = [:]
+
+@MainActor
+func cachedMenuBarIcon(for active: SessionState, dark: Bool) -> NSImage {
+    let key = "\(active.rawValue)-\(dark)"
+    if let image = menuBarIconCache[key] { return image }
+    let image = menuBarIcon(for: active)
+    menuBarIconCache[key] = image
+    return image
+}
+
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var aggregate: SessionState = .green
-    @Published var sessions: [SessionViewItem] = []
-    @Published var usage: UsageSnapshot?   // 5h/weekly rate-limit snapshot (from a statusline)
+    @Published private(set) var aggregate: SessionState = .green
+    @Published private(set) var sessions: [SessionViewItem] = []
+    @Published private(set) var usage: UsageSnapshot?   // 5h/weekly rate-limit snapshot (from a statusline)
+    @Published private(set) var menuBarDark = false     // re-tints the icon when the menu bar flips
     @Published var showFloating: Bool {
         didSet {
             UserDefaults.standard.set(showFloating, forKey: "showFloating")
@@ -130,38 +144,77 @@ final class AppModel: ObservableObject {
     private let coordinator = NotificationCoordinator()
     private let notifier: Notifier = UserNotifier()
     private let floating = FloatingPanelController()
-    private var timer: Timer?
+    private var watcher: DirectoryWatcher?
+    private var reapTimer: Timer?
+    private var appearanceObservation: NSKeyValueObservation?
+    private var defaultsObserver: NSObjectProtocol?
 
     init() {
         showFloating = UserDefaults.standard.bool(forKey: "showFloating")
         // Cowork / Desktop Code sessions run the Claude Code engine, so they fire the hooks
         // like CLI/IDE — one store covers them all, and closed sessions drop off via SessionEnd.
-        vm = StatusViewModel(store: StateStore(directory: StateStore.defaultDirectory()))
+        let directory = StateStore.defaultDirectory()
+        vm = StatusViewModel(store: StateStore(directory: directory))
         refresh()
-        // Poll-only (G8): one 0.5s timer drives state, notifications, and elapsed display.
-        timer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
+
+        // Event-driven: every hook write, usage.json snapshot and ignore.txt edit lands in this
+        // directory, so the app sleeps until one happens instead of polling.
+        watcher = DirectoryWatcher(directory: directory) { [weak self] in
+            MainActor.assumeIsolated { self?.refresh() }
+        }
+        watcher?.start()
+        // Slow safety net for what no write announces: reaping sessions that went silent
+        // (TTL 30 min) and the usage bar's staleness dim. Tolerance lets macOS coalesce wakeups.
+        reapTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refresh() }
+        }
+        reapTimer?.tolerance = 15
+
+        menuBarDark = Self.isDark(NSApplication.shared.effectiveAppearance)
+        // effectiveAppearance changes on the main thread.
+        appearanceObservation = NSApplication.shared.observe(\.effectiveAppearance) { [weak self] app, _ in
+            MainActor.assumeIsolated {
+                let dark = Self.isDark(app.effectiveAppearance)
+                if let self, self.menuBarDark != dark { self.menuBarDark = dark }
+            }
+        }
+        // Floating-panel size depends on settings edited in the dropdown (max lights, usage bar).
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateFloatingSize() }
         }
         if showFloating { floating.show(model: self) }
+    }
+
+    private nonisolated static func isDark(_ appearance: NSAppearance) -> Bool {
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
     /// Re-apply the light/dark override to the floating window (dropdown handles itself).
     func applyAppearance() { floating.applyAppearance() }
 
-    func refresh() {
-        vm.refresh()
-        aggregate = vm.aggregate
-        sessions = vm.sessions
-        usage = UsageStore.read()   // nil until a statusline writes usage.json
+    /// Keep the floating panel's size in step with the live session count + settings.
+    func updateFloatingSize() {
+        guard showFloating else { return }
+        let maxLights = min(5, max(1, Int(UserDefaults.standard.object(forKey: "floatingMaxLights") as? Double ?? 3)))
+        let sel = FloatingSelection.select(sessions, max: maxLights)
+        let usageBars = (UserDefaults.standard.bool(forKey: "showUsageBar") && usage != nil)
+            ? 1 + ((usage?.sevenDayPercent != nil) ? 1 : 0) : 0
+        floating.updateSize(shown: sel.shown.count, overflow: sel.overflow > 0, usageBars: usageBars)
+    }
 
-        // Keep the floating panel's size in step with the live session count + settings.
-        if showFloating {
-            let maxLights = min(5, max(1, Int(UserDefaults.standard.object(forKey: "floatingMaxLights") as? Double ?? 3)))
-            let sel = FloatingSelection.select(vm.sessions, max: maxLights)
-            let usageBars = (UserDefaults.standard.bool(forKey: "showUsageBar") && usage != nil)
-                ? 1 + ((usage?.sevenDayPercent != nil) ? 1 : 0) : 0
-            floating.updateSize(shown: sel.shown.count, overflow: sel.overflow > 0, usageBars: usageBars)
+    func refresh() {
+        // Assign only on a real change: @Published fires on every set, and each publish
+        // re-renders and re-sizes the dropdown and the floating panel.
+        if vm.refresh() {
+            if aggregate != vm.aggregate { aggregate = vm.aggregate }
+            if sessions != vm.sessions { sessions = vm.sessions }
         }
+        let newUsage = UsageStore.read()   // nil until a statusline writes usage.json
+        if newUsage != usage { usage = newUsage }
+
+        updateFloatingSize()
 
         let settings = currentNotificationSettings()
         let d = UserDefaults.standard
@@ -196,7 +249,7 @@ struct ClaudeStatusBarApp: App {
         MenuBarExtra {
             DropdownView(model: model)
         } label: {
-            Image(nsImage: menuBarIcon(for: model.aggregate))
+            Image(nsImage: cachedMenuBarIcon(for: model.aggregate, dark: model.menuBarDark))
         }
         .menuBarExtraStyle(.window)
     }
@@ -217,7 +270,7 @@ struct DropdownView: View {
     @AppStorage("floatingMaxLights") private var floatingMaxLights: Double = 3
     @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
     @AppStorage("showUsageBar") private var showUsageBar = false
-    @State private var startAtLogin = SMAppService.mainApp.status == .enabled
+    @State private var startAtLogin = false   // read on appear, not in init (init runs per parent update)
     @State private var ignoredProjects = ""
     @State private var hookStatus = ""
 
@@ -233,20 +286,26 @@ struct DropdownView: View {
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                     .padding(.vertical, 4)
             } else {
-                ForEach(model.sessions) { session in
-                    let color = Color(nsColor: lampNSColor(session.state))
-                    HStack(spacing: 9) {
-                        Circle()
-                            .fill(color)
-                            .frame(width: 8, height: 8)
-                            .shadow(color: color.opacity(0.7), radius: 3)
-                        Text(session.displayName).font(.system(size: 13)).lineLimit(1)
-                        Spacer(minLength: 8)
-                        Text(formatElapsed(session.elapsed))
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(.secondary)
+                // Only the elapsed labels tick (and only while the menu is open); the rows
+                // themselves re-render only when the session list changes.
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(model.sessions) { session in
+                            let color = Color(nsColor: lampNSColor(session.state))
+                            HStack(spacing: 9) {
+                                Circle()
+                                    .fill(color)
+                                    .frame(width: 8, height: 8)
+                                    .shadow(color: color.opacity(0.7), radius: 3)
+                                Text(session.displayName).font(.system(size: 13)).lineLimit(1)
+                                Spacer(minLength: 8)
+                                Text(formatElapsed(session.elapsed(at: context.date)))
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 3)
+                        }
                     }
-                    .padding(.vertical, 3)
                 }
             }
 
@@ -295,6 +354,7 @@ struct DropdownView: View {
             }
             toggleRow("Start at login", isOn: $startAtLogin)
                 .onChange(of: startAtLogin) { _, on in
+                    guard on != (SMAppService.mainApp.status == .enabled) else { return }   // synced on appear
                     do {
                         if on { try SMAppService.mainApp.register() }
                         else { try SMAppService.mainApp.unregister() }
@@ -304,13 +364,12 @@ struct DropdownView: View {
             if let u = model.usage {
                 divider
                 header("Usage")
-                let stale = u.isStale(now: Date(), maxAge: 900)
                 VStack(alignment: .leading, spacing: 7) {
                     UsageBar(label: "5H USAGE", percent: u.fiveHourPercent ?? 0,
-                             resetsAt: u.fiveHourResetsAt, stale: stale)
+                             resetsAt: u.fiveHourResetsAt, updatedAt: u.updatedAt)
                     if let wk = u.sevenDayPercent {
                         UsageBar(label: "WEEKLY", percent: wk,
-                                 resetsAt: u.sevenDayResetsAt, stale: stale)
+                                 resetsAt: u.sevenDayResetsAt, updatedAt: u.updatedAt)
                     }
                 }
                 .padding(.bottom, 2)
@@ -357,6 +416,7 @@ struct DropdownView: View {
         }
         .background(WindowAppearance(appearance: appearanceMode.nsAppearance))   // force light/dark on this menu
         .onAppear {
+            startAtLogin = SMAppService.mainApp.status == .enabled
             ignoredProjects = (try? String(contentsOf: IgnoreList.defaultFileURL(), encoding: .utf8)) ?? ""
         }
     }
