@@ -47,9 +47,9 @@ func floatingLayoutTests() -> TestSuite { ("FloatingLayoutTests", { t in
 
     // empty / one light: floored to the header min so "CLAUDE CODE" never clips
     t.expectEqual(FloatingLayout.contentWidth(shown: 0, overflow: false), floor)
-    t.expectEqual(FloatingLayout.contentWidth(shown: 1, overflow: false), floor)  // 46 < floor
+    t.expectEqual(FloatingLayout.contentWidth(shown: 1, overflow: false), floor)  // one cell < floor
 
-    // three lights, no chip: 3*46 + 2*4 = 146 (above floor)
+    // three lights, no chip (above floor)
     t.expectEqual(FloatingLayout.contentWidth(shown: 3, overflow: false), 3*cell + 2*gap)
 
     // three lights + chip: + gap + chip

@@ -3,7 +3,7 @@ import CoreGraphics
 /// Geometry for the floating panel — shared by the SwiftUI content (frame width) and the
 /// window controller (window size) so they always agree, and unit-testable.
 public enum FloatingLayout {
-    public static let cell: CGFloat = 46        // one traffic-light cell (label) width
+    public static let cell: CGFloat = 58        // one traffic-light cell (label) width
     public static let gap: CGFloat = 4          // spacing between cells
     public static let chip: CGFloat = 26        // the +N overflow chip width
     public static let headerMin: CGFloat = 132  // min width so "CLAUDE CODE" + close button never clip

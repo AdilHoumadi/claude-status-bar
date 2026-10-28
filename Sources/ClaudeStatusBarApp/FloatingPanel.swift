@@ -3,106 +3,6 @@ import AppKit
 import StatusApp
 import StatusCore
 
-/// Bridges an `NSVisualEffectView` into SwiftUI so the panel is real macOS vibrancy
-/// glass (translucent, follows the system light/dark appearance).
-struct VisualEffectView: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .popover   // adapts to light/dark (unlike .hudWindow)
-
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
-        nsView.material = material
-    }
-}
-
-extension Color {
-    /// Tints toward black in Dark Mode and white in Light Mode, so the opacity slider
-    /// *darkens* the glass in dark and *frosts* it in light — always readable, always native.
-    static let panelTint = Color(nsColor: NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? .black : .white
-    })
-}
-
-/// User's appearance override for the app's panels. Applied per-window (not to NSApp) so the
-/// menu-bar icon keeps following the real menu bar.
-enum AppearanceMode: String, CaseIterable {
-    case system, light, dark
-
-    /// nil = follow the system appearance.
-    var nsAppearance: NSAppearance? {
-        switch self {
-        case .system: return nil
-        case .light: return NSAppearance(named: .aqua)
-        case .dark: return NSAppearance(named: .darkAqua)
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .system: return "System"
-        case .light: return "Light"
-        case .dark: return "Dark"
-        }
-    }
-
-    static var current: AppearanceMode {
-        AppearanceMode(rawValue: UserDefaults.standard.string(forKey: "appearanceMode") ?? "") ?? .system
-    }
-}
-
-/// Applies an explicit `NSAppearance` to the hosting window so a surface can be forced light or
-/// dark independent of the system (nil follows the system). Flipping the window appearance flips
-/// its vibrancy material, the adaptive `panelTint`, and SwiftUI's `.primary`/`.secondary` colors.
-///
-/// Only writes when the value differs: setting `window.appearance` invalidates the hosting
-/// view, which calls `updateNSView` again — unconditional writes turned that into a layout
-/// loop that pinned the main thread at 100% CPU.
-struct WindowAppearance: NSViewRepresentable {
-    let appearance: NSAppearance?
-
-    final class ApplyingView: NSView {
-        var target: NSAppearance? { didSet { applyDeferred() } }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            applyDeferred()
-        }
-
-        /// Deferred so the window isn't mutated mid SwiftUI update pass.
-        private func applyDeferred() {
-            DispatchQueue.main.async { [weak self] in
-                guard let self, let window = self.window,
-                      window.appearance?.name != self.target?.name else { return }
-                window.appearance = self.target
-            }
-        }
-    }
-
-    func makeNSView(context: Context) -> ApplyingView {
-        let view = ApplyingView()
-        view.target = appearance
-        return view
-    }
-
-    func updateNSView(_ nsView: ApplyingView, context: Context) {
-        guard nsView.target?.name != appearance?.name else { return }
-        nsView.target = appearance
-    }
-}
-
-private func lampColor(_ s: SessionState) -> Color {
-    switch s {
-    case .red: return Color(red: 1.0, green: 0.23, blue: 0.19)
-    case .yellow: return Color(red: 1.0, green: 0.62, blue: 0.04)
-    case .green: return Color(red: 0.19, green: 0.82, blue: 0.35)
-    }
-}
-
 private func compactElapsed(_ t: TimeInterval) -> String {
     let s = Int(t)
     if s < 60 { return "\(s)s" }
@@ -129,63 +29,41 @@ struct MiniTrafficLight: View {
                 lamp(.green)
             }
             .padding(4)
-            .background(
-                LinearGradient(colors: [Color(white: 0.22), Color(white: 0.05)],
-                               startPoint: .top, endPoint: .bottom),
-                in: RoundedRectangle(cornerRadius: 6)
-            )
+            .background(Color(white: 0.11), in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(.white.opacity(0.10), lineWidth: 0.5))
 
             VStack(spacing: 0) {
                 Text(name)
                     .font(.system(size: 9, weight: .medium))
                     .lineLimit(1).truncationMode(.tail)
-                    .foregroundStyle(.primary.opacity(0.92))
                 // Only this label ticks; the lamps re-render only on a state change.
                 TimelineView(.periodic(from: .now, by: 1)) { context in
                     Text(compactElapsed(session.elapsed(at: context.date)))
-                        .font(.system(size: 8, weight: .regular, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                        .font(.system(size: 8.5, weight: .medium).monospacedDigit())
+                        .foregroundStyle(session.state == .green ? Color.secondary : session.state.tint)
                 }
             }
-            .frame(width: 46)
+            .frame(width: FloatingLayout.cell)
         }
     }
 
     @ViewBuilder private func lamp(_ state: SessionState) -> some View {
         let lit = session.state == state
+        let color = Color(nsColor: state.lampNSColor)
         Circle()
-            .fill(lit ? lampColor(state) : Color.white.opacity(0.07))
+            .fill(lit ? color : Color.white.opacity(0.07))
             .frame(width: 13, height: 13)
-            .shadow(color: lit ? lampColor(state).opacity(0.95) : .clear, radius: 4.5)
+            .shadow(color: lit ? color.opacity(0.8) : .clear, radius: 4)
     }
 }
 
-/// Human reset countdown, e.g. "resets 3d23h" (weekly) / "resets 4h57m" / "resets 42m".
-func formatUsageReset(_ resetsAt: Date, now: Date = Date()) -> String {
-    let s = Int(resetsAt.timeIntervalSince(now))
-    if s <= 0 { return "resetting" }
-    let d = s / 86400, h = (s % 86400) / 3600, m = (s % 3600) / 60
-    if d > 0 { return "resets \(d)d\(h)h" }
-    if h > 0 { return "resets \(h)h\(m)m" }
-    return "resets \(m)m"
-}
-
-/// A colorful 5-hour usage loader: the full green→yellow→red gradient revealed up to `percent`,
-/// so both fill length and color convey how close to the limit you are.
+/// A compact usage line for the floating panel: label, percent and reset, over a thin bar
+/// in the threshold colour.
 struct UsageBar: View {
     let label: String
     let percent: Int
     let resetsAt: Date?
     let updatedAt: Date   // snapshot time; the bar dims once it's older than 15 minutes
-
-    private let gradient = LinearGradient(colors: [
-        Color(red: 0.19, green: 0.82, blue: 0.35),  // green
-        Color(red: 0.55, green: 0.85, blue: 0.20),
-        Color(red: 1.0,  green: 0.80, blue: 0.10),  // yellow
-        Color(red: 1.0,  green: 0.55, blue: 0.10),  // orange
-        Color(red: 1.0,  green: 0.23, blue: 0.19),  // red
-    ], startPoint: .leading, endPoint: .trailing)
 
     var body: some View {
         // Reset countdown and staleness are minute-granular: re-render once a minute, not per tick.
@@ -195,38 +73,32 @@ struct UsageBar: View {
     }
 
     private func content(now: Date) -> some View {
-        let pct = Double(min(100, max(0, percent))) / 100
-        let stale = now.timeIntervalSince(updatedAt) > 900
+        let tint = usageTint(percent)
         return VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(label).font(.system(size: 8, weight: .semibold)).kerning(0.5)
-                    .foregroundStyle(.secondary)
+            HStack(spacing: 5) {
+                Text(label).font(.system(size: 9.5, weight: .medium))
+                Text("\(percent)%").font(.system(size: 9.5, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(tint)
                 Spacer()
-                Text("\(percent)%").font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary.opacity(0.85))
                 if let r = resetsAt {
-                    Text("· \(formatUsageReset(r, now: now))").font(.system(size: 8, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                    Text(formatUsageReset(r, now: now)).font(.system(size: 8.5)).foregroundStyle(.secondary)
                 }
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
-                    Capsule().fill(.primary.opacity(0.12))
-                    gradient
-                        .frame(width: g.size.width)
-                        .mask(Capsule().frame(width: max(6, g.size.width * pct))
-                                       .frame(maxWidth: .infinity, alignment: .leading))
+                    Capsule().fill(Color.primary.opacity(0.08))
+                    Capsule().fill(tint)
+                        .frame(width: max(5, g.size.width * Double(min(100, max(0, percent))) / 100))
                 }
             }
-            .frame(height: 7)
+            .frame(height: 5)
         }
-        .opacity(stale ? 0.45 : 1)   // dim when the snapshot is old
+        .opacity(now.timeIntervalSince(updatedAt) > 900 ? 0.45 : 1)
     }
 }
 
 /// A subtle close control for the panel header: hides the floating panel (same effect as
-/// flipping the dropdown's "Floating lights" switch off). Dim by default, brightens on hover
-/// so it stays quiet until you reach for it.
+/// turning Floating Lights off). Dim by default, brightens on hover.
 struct PanelCloseButton: View {
     let action: () -> Void
     @State private var hovering = false
@@ -241,18 +113,16 @@ struct PanelCloseButton: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("Hide floating panel")
+        .help("Hide floating lights")
     }
 }
 
 /// The floating panel's content: up to five traffic-lights worst-first, then a +N chip.
 struct FloatingLightsView: View {
     @ObservedObject var model: AppModel
-    // Shared with the Settings slider; updates the glass live as it's dragged.
-    @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
     // How many lights to show before collapsing the rest into the +N chip (1–5).
     @AppStorage("floatingMaxLights") private var floatingMaxLights: Double = 3
-    // Show the 5-hour usage bar at the bottom (only when a usage snapshot exists).
+    // Show the usage bars at the bottom (only when a usage snapshot exists).
     @AppStorage("showUsageBar") private var showUsageBar = false
 
     var body: some View {
@@ -262,16 +132,13 @@ struct FloatingLightsView: View {
             shown: selection.shown.count, overflow: selection.overflow > 0, showUsage: usageVisible)
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
-                Text("Claude Code")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                    .kerning(0.4)
+                KorMark(cornerRadius: 3.5, inset: 3).frame(width: 15, height: 15)
+                Text("Claude Code").font(.system(size: 11, weight: .semibold))
                 Spacer()
                 if !model.sessions.isEmpty {
                     Text("\(model.sessions.count)")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.tertiary)
+                        .font(.system(size: 10, weight: .medium).monospacedDigit())
+                        .foregroundStyle(.secondary)
                 }
                 PanelCloseButton { model.showFloating = false }
             }
@@ -287,25 +154,24 @@ struct FloatingLightsView: View {
                     if selection.overflow > 0 {
                         VStack(spacing: 4) {
                             Text("+\(selection.overflow)")
-                                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                                .foregroundStyle(.primary.opacity(0.75))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.korMain)
                                 .frame(width: 26, height: 53)
-                                .background(.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 7))
-                                .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(.primary.opacity(0.14), lineWidth: 0.5))
+                                .background(Color.korMain.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
                             Text("more")
-                                .font(.system(size: 8, weight: .regular, design: .monospaced))
-                                .foregroundStyle(.tertiary)
+                                .font(.system(size: 8.5))
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
             }
 
             if showUsageBar, let u = model.usage {
-                Rectangle().fill(.primary.opacity(0.10)).frame(height: 1).padding(.top, 1)
-                UsageBar(label: "5H USAGE", percent: u.fiveHourPercent ?? 0,
+                Divider().padding(.top, 1)
+                UsageBar(label: "5-hour", percent: u.fiveHourPercent ?? 0,
                          resetsAt: u.fiveHourResetsAt, updatedAt: u.updatedAt)
                 if let weekly = u.sevenDayPercent {
-                    UsageBar(label: "WEEKLY", percent: weekly,
+                    UsageBar(label: "Weekly", percent: weekly,
                              resetsAt: u.sevenDayResetsAt, updatedAt: u.updatedAt)
                 }
             }
@@ -314,14 +180,10 @@ struct FloatingLightsView: View {
         .frame(width: contentWidth, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
-        .background {
-            ZStack {
-                VisualEffectView()
-                Color.panelTint.opacity(panelOpacity * 0.7)   // user-controlled glass depth, adapts to appearance
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(.primary.opacity(0.14), lineWidth: 1))
+        // Solid like the dropdown; Floating Opacity fades the whole window instead.
+        .background(Color(nsColor: .windowBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.12), lineWidth: 1))
     }
 }
 
@@ -366,6 +228,12 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         panel?.appearance = AppearanceMode.current.nsAppearance
     }
 
+    func applyOpacity() {
+        let raw = UserDefaults.standard.object(forKey: "floatingOpacity") as? Double ?? 1
+        let alpha = CGFloat(min(1, max(0.3, raw)))
+        if let p = panel, abs(p.alphaValue - alpha) > 0.01 { p.alphaValue = alpha }
+    }
+
     /// Resize the panel to fit `shown` lights (+ chip) and the optional usage bar, keeping the
     /// top-right anchor. Called each refresh so it tracks the live count / settings.
     func updateSize(shown: Int, overflow: Bool, usageBars: Int) {
@@ -389,8 +257,11 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         return 1 + (u.sevenDayPercent != nil ? 1 : 0)
     }
 
+    /// Drops the window, not just hides it: a hidden view kept ticking its elapsed timers.
     func hide() {
         panel?.orderOut(nil)
+        panel?.contentView = nil
+        panel = nil
     }
 
     // Anchor by the TOP-RIGHT corner so the panel grows left/down from a fixed point and
