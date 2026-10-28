@@ -1,23 +1,28 @@
 # 🚦 Claude Status Bar
 
 ![macOS 14+](https://img.shields.io/badge/macOS-14%2B-000000?logo=apple&logoColor=white)
-![Swift](https://img.shields.io/badge/Swift-5.9-F05138?logo=swift&logoColor=white)
-![Menu bar](https://img.shields.io/badge/menu%20bar-SwiftUI-1E90FF)
+![Swift](https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white)
+![Menu bar](https://img.shields.io/badge/menu%20bar-SwiftUI%20%2B%20AppKit-1E90FF)
 ![Telemetry](https://img.shields.io/badge/telemetry-none-2ecc71)
 
 An ambient status light for [Claude Code](https://claude.com/claude-code). A menu-bar
-dot and an optional floating glass panel show, at a glance, whether each session is
+traffic light and an optional floating panel show, at a glance, whether each session is
 **🔴 waiting for you**, **🟡 running**, or **🟢 done** — driven automatically by Claude
 Code hooks, with desktop notifications on the transitions that matter.
 
 No network, no telemetry. Everything is local files under `~/.claude/`.
 
-![Claude Status Bar — the floating panel and session list in light and dark mode](docs/hero.png)
+![Claude Status Bar — the menu-bar panel in light and dark mode](docs/hero.png)
 
 ## 📋 Requirements
 
 - macOS 14 (Sonoma) or later
-- Swift toolchain (Xcode **or** Command Line Tools: `xcode-select --install`)
+- Xcode (the full app, not just Command Line Tools: recent Command Line Tools ship without the
+  SwiftUI macro plugin, so the build fails with `plugin for module 'SwiftUIMacros' not found`)
+
+If `xcode-select -p` prints `/Library/Developer/CommandLineTools`, either switch with
+`sudo xcode-select -s /Applications/Xcode.app` or prefix the install command with
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 
 ## 🚀 Install (CLI)
 
@@ -36,7 +41,7 @@ cd claude-status-bar
 3. copies it to **`~/Applications`** (its permanent home),
 4. wires the hooks into `~/.claude/settings.json` — your existing hooks are preserved and
    a `.bak` is written,
-5. launches it — a dot appears in your menu bar.
+5. launches it — a traffic light appears in your menu bar.
 
 Re-running is safe: hooks merge idempotently (no duplicates), and reinstalling to the same
 path preserves your notification permission.
@@ -96,12 +101,12 @@ the Claude Code engine and fire the same hooks.
 
 ## 📊 Usage bars — 5-hour + weekly (optional)
 
-The floating panel (and the dropdown menu) can show colourful **usage** loaders — a **5-hour**
-bar and, when available, a **weekly** bar (green → yellow → red as you approach each limit, with
-a reset countdown). Enable the floating bars in **gear menu → Usage in Floating Lights**; the dropdown shows
-them automatically whenever usage data exists.
+The menu-bar panel and the floating lights can show **usage** bars — a **5-hour**
+bar and, when available, a **weekly** bar (green under 75%, amber under 90%, red above, with a
+reset countdown). The menu-bar panel shows them whenever usage data exists; for the floating
+lights, turn on **gear menu → Usage in Floating Lights**.
 
-![Usage bars in light and dark mode](docs/usage.png)
+![Floating lights with usage bars in light and dark mode](docs/usage.png)
 
 Claude Code only exposes the real rate-limit numbers to a **statusline** command (never to hooks
 or any file — it's a native Claude Code feature, not a plugin), so this is opt-in: point the
@@ -143,7 +148,7 @@ Until a snapshot exists the bar stays hidden (no fake data). The number matches 
 
 ```
 Claude Code ──hook (sync)──▶ claude-statusbar-hook ──▶ ~/.claude/statusbar/<id>.json
-                                                              │ (polled every 0.5s)
+                                                              │ (directory watcher, no polling)
                                               menu-bar app + floating panel
 ```
 
@@ -169,13 +174,16 @@ rm -rf ~/Applications/ClaudeStatusBar.app ~/.claude/statusbar
 
 - **No notifications** — approve them in System Settings → Notifications → ClaudeStatusBar.
   Notifications only fire from the bundled `.app` (not bare `swift run`).
-- **Dot doesn't move** — make sure you opened a *new* session after installing; check a
+- **Light doesn't change** — make sure you opened a *new* session after installing; check a
   state file appears: `ls ~/.claude/statusbar/`.
 - **"Start at login" won't stick / an old build keeps launching** — make sure there's only
   **one** copy of the app. A duplicate in `/Applications` and `~/Applications` share a bundle
   id, so the wrong one launches at login and shadows updates. Keep the `~/Applications` copy
   and delete the other (`sudo rm -rf /Applications/ClaudeStatusBar.app`), then toggle **Start
   at login** off/on to re-register.
+- **Icon missing from the menu bar** — macOS may have put it in the hidden section of a crowded
+  menu bar (behind the `«` chevron). Expand it and ⌘-drag the traffic light out; macOS remembers
+  the spot.
 
 ## 🛠️ Development
 
@@ -183,11 +191,13 @@ rm -rf ~/Applications/ClaudeStatusBar.app ~/.claude/statusbar
 swift run ClaudeStatusBarTests   # full test suite (dependency-free harness)
 swift build                      # build all targets
 ./scripts/bundle.sh              # build the .app only
+CSB_RENDER=/tmp/shot .build/debug/ClaudeStatusBarApp   # render both panels, light + dark, to PNGs
 ```
 
 Source is a SwiftPM package: `StatusCore` (state model), `StatusStore` (hook helper +
 state files), `StatusApp` (view-model, notifications, floating selection),
-`StatusInstall` (settings.json installer), and the `ClaudeStatusBarApp` SwiftUI shell.
+`StatusInstall` (settings.json installer), and the `ClaudeStatusBarApp` shell (AppKit status
+item + SwiftUI views).
 
 ## 📤 Distribution
 

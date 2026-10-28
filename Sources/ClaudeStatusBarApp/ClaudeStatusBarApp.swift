@@ -302,9 +302,9 @@ extension AppModel {
         let now = Date()
         let sessions = [
             SessionViewItem(id: "a", state: .red, cwd: "/Users/me/Projects/claude-status-bar", stateSince: now - 252),
-            SessionViewItem(id: "b", state: .yellow, cwd: "/Users/me/Projects/kor-cli", stateSince: now - 74),
-            SessionViewItem(id: "c", state: .yellow, cwd: "/Users/me/Projects/rs-metrics", stateSince: now - 9),
-            SessionViewItem(id: "d", state: .green, cwd: "/Users/me/Projects/korvpn", stateSince: now - 760),
+            SessionViewItem(id: "b", state: .yellow, cwd: "/Users/me/Projects/api-server", stateSince: now - 74),
+            SessionViewItem(id: "c", state: .yellow, cwd: "/Users/me/Projects/worker", stateSince: now - 9),
+            SessionViewItem(id: "d", state: .green, cwd: "/Users/me/Projects/web", stateSince: now - 760),
         ]
         let usage = UsageSnapshot(updatedAt: now, fiveHourPercent: 38, fiveHourResetsAt: now + 17_820,
                                   sevenDayPercent: 81, sevenDayResetsAt: now + 344_000)
