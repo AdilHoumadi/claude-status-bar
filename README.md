@@ -67,28 +67,29 @@ signed (not notarized), so on first launch **right-click the app → Open**, or 
 xattr -dr com.apple.quarantine /Applications/ClaudeStatusBar.app
 ```
 
-Then click the menu-bar dot → **Install hooks** (or run
+Then open the menu-bar panel → gear menu → **Install Hooks** (or run
 `~/.claude/statusbar/bin/claude-statusbar-hook --install`) to wire it into Claude Code.
 
 ## 👀 Using it
 
-Everything lives in the menu-bar dropdown — click the dot to open it.
+Click the traffic light in the menu bar to open the panel.
 
-- **Menu bar dot** — aggregate state across all sessions (worst-state-wins).
-- **Sessions** — per-session list: project name and time in the current state.
-- **Floating lights** — an always-on-top glass panel with a road traffic-light per session
-  (worst-first, `+N` overflow chip). The width adapts to how many are shown. Drag it
-  anywhere; the position is remembered.
-- **Options**:
+- **Header** — the bell switch turns notifications on or off.
+- **Status card** — the overall state (worst wins: waiting > running > done) and how many
+  sessions are in each.
+- **Sessions** — one row per session: project, state tag, and time in the current state.
+  Right-click a row to reveal it in Finder, copy its path, or ignore the project.
+- **Usage** — 5-hour and weekly bars, once a statusline snapshot exists (see below).
+- **Gear menu** — every option:
   - **Notifications** / **Sound** — banners (and sound) on the transitions that matter.
   - **Appearance** — System / Light / Dark, applied to both surfaces.
-  - **Opacity** — dims the dropdown and the floating panel together.
-  - **Floating lights** — toggle the panel, plus a **Max lights** slider (1–5) capping how
-    many show before the `+N` chip.
-  - **Start at login**.
-- **Ignored projects** — one path prefix per line; sessions under those folders are hidden
-  (handy for headless/automated `claude -p` runs).
-- **Install hooks / Uninstall** — wire the hooks into Claude Code, or remove them.
+  - **Floating Lights** — an always-on-top panel with a traffic light per session
+    (worst-first, `+N` overflow chip). Drag it anywhere; the position is remembered.
+    **Lights Shown** (1–5), **Floating Opacity** and **Usage in Floating Lights** tune it.
+  - **Ignored Projects…** — one folder per line; sessions under those folders are hidden
+    (handy for headless/automated `claude -p` runs). Saved when you press Save.
+  - **Install Hooks** / **Uninstall Hooks** — wire the hooks into Claude Code, or remove them.
+  - **Start at Login**.
 
 CLI, IDE extensions, and Claude Desktop's Code / Cowork sessions are all covered — they run
 the Claude Code engine and fire the same hooks.
@@ -97,7 +98,7 @@ the Claude Code engine and fire the same hooks.
 
 The floating panel (and the dropdown menu) can show colourful **usage** loaders — a **5-hour**
 bar and, when available, a **weekly** bar (green → yellow → red as you approach each limit, with
-a reset countdown). Enable the floating bars in **Options → 5h usage bar**; the dropdown shows
+a reset countdown). Enable the floating bars in **gear menu → Usage in Floating Lights**; the dropdown shows
 them automatically whenever usage data exists.
 
 ![Usage bars in light and dark mode](docs/usage.png)

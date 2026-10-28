@@ -1,31 +1,21 @@
 import SwiftUI
 import AppKit
 import UserNotifications
-import ServiceManagement
 import StatusApp
 import StatusCore
 import StatusStore
 import StatusInstall
 
-private func lampNSColor(_ s: SessionState) -> NSColor {
-    switch s {
-    case .red: return NSColor(srgbRed: 1.0, green: 0.23, blue: 0.19, alpha: 1)
-    case .yellow: return NSColor(srgbRed: 1.0, green: 0.62, blue: 0.04, alpha: 1)
-    case .green: return NSColor(srgbRed: 0.20, green: 0.82, blue: 0.35, alpha: 1)
-    }
-}
-
 /// A traffic-light glyph for the menu bar: a solid housing silhouette (adapts to a light
 /// or dark menu bar) with three cut-out lamps; the `active` lamp is filled in colour.
 /// Non-template so the colour shows.
 @MainActor
-func menuBarIcon(for active: SessionState) -> NSImage {
+func menuBarIcon(for active: SessionState, dark: Bool) -> NSImage {
     let w: CGFloat = 13, h: CGFloat = 18
     let image = NSImage(size: NSSize(width: w, height: h))
     image.lockFocus()
     let ctx = NSGraphicsContext.current!.cgContext
 
-    let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     let foreground = (dark ? NSColor.white : NSColor.black).withAlphaComponent(0.92)
 
     // Solid housing silhouette.
@@ -51,7 +41,7 @@ func menuBarIcon(for active: SessionState) -> NSImage {
     for (_, r) in lamps { ctx.fillEllipse(in: r) }
     ctx.setBlendMode(.normal)
     if let r = lamps.first(where: { $0.0 == active })?.1 {
-        ctx.setFillColor(lampNSColor(active).cgColor)
+        ctx.setFillColor(active.lampNSColor.cgColor)
         ctx.fillEllipse(in: r)
     }
 
@@ -60,15 +50,8 @@ func menuBarIcon(for active: SessionState) -> NSImage {
     return image
 }
 
-func formatElapsed(_ t: TimeInterval) -> String {
-    let s = Int(t)
-    if s < 60 { return "\(s)s" }
-    if s < 3600 { return "\(s / 60)m \(s % 60)s" }
-    return "\(s / 3600)h \((s % 3600) / 60)m"
-}
-
 /// Reads notification preferences from UserDefaults (defaults: notify on red + green,
-/// sound on). The Settings UI writes the same keys via `@AppStorage`.
+/// sound on). The gear menu writes the same keys via `@AppStorage`.
 func currentNotificationSettings() -> NotificationSettings {
     let d = UserDefaults.standard
     func flag(_ key: String, _ def: Bool) -> Bool { d.object(forKey: key) as? Bool ?? def }
@@ -123,7 +106,7 @@ private var menuBarIconCache: [String: NSImage] = [:]
 func cachedMenuBarIcon(for active: SessionState, dark: Bool) -> NSImage {
     let key = "\(active.rawValue)-\(dark)"
     if let image = menuBarIconCache[key] { return image }
-    let image = menuBarIcon(for: active)
+    let image = menuBarIcon(for: active, dark: dark)
     menuBarIconCache[key] = image
     return image
 }
@@ -134,6 +117,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var sessions: [SessionViewItem] = []
     @Published private(set) var usage: UsageSnapshot?   // 5h/weekly rate-limit snapshot (from a statusline)
     @Published private(set) var menuBarDark = false     // re-tints the icon when the menu bar flips
+    @Published private(set) var hooksInstalled = true
+    @Published private(set) var notice: String?
+    @Published private(set) var lastError: String?
     @Published var showFloating: Bool {
         didSet {
             UserDefaults.standard.set(showFloating, forKey: "showFloating")
@@ -142,7 +128,7 @@ final class AppModel: ObservableObject {
     }
     private let vm: StatusViewModel
     private let coordinator = NotificationCoordinator()
-    private let notifier: Notifier = UserNotifier()
+    private lazy var notifier: Notifier = UserNotifier()
     private let floating = FloatingPanelController()
     private var watcher: DirectoryWatcher?
     private var reapTimer: Timer?
@@ -155,7 +141,9 @@ final class AppModel: ObservableObject {
         // like CLI/IDE — one store covers them all, and closed sessions drop off via SessionEnd.
         let directory = StateStore.defaultDirectory()
         vm = StatusViewModel(store: StateStore(directory: directory))
+        _ = notifier
         refresh()
+        hooksInstalled = Self.checkHooksInstalled()
 
         // Event-driven: every hook write, usage.json snapshot and ignore.txt edit lands in this
         // directory, so the app sleeps until one happens instead of polling.
@@ -178,7 +166,7 @@ final class AppModel: ObservableObject {
                 if let self, self.menuBarDark != dark { self.menuBarDark = dark }
             }
         }
-        // Floating-panel size depends on settings edited in the dropdown (max lights, usage bar).
+        // Floating-panel size and opacity depend on settings edited in the gear menu.
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -187,12 +175,82 @@ final class AppModel: ObservableObject {
         if showFloating { floating.show(model: self) }
     }
 
+    /// Fixed data and no watcher, notifier or floating window: for rendering screenshots.
+    init(preview sessions: [SessionViewItem], usage: UsageSnapshot?) {
+        showFloating = false
+        vm = StatusViewModel(store: StateStore(directory: FileManager.default.temporaryDirectory))
+        self.sessions = sessions
+        self.aggregate = SessionState.aggregate(sessions.map(\.state))
+        self.usage = usage
+    }
+
     private nonisolated static func isDark(_ appearance: NSAppearance) -> Bool {
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
-    /// Re-apply the light/dark override to the floating window (dropdown handles itself).
+    private static func checkHooksInstalled() -> Bool {
+        let settings = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude/settings.json")
+        guard let text = try? String(contentsOf: settings, encoding: .utf8) else { return false }
+        return text.contains(SettingsJsonMerge.marker)
+    }
+
+    /// Re-apply the light/dark override to the floating window (the dropdown handles itself).
     func applyAppearance() { floating.applyAppearance() }
+
+    /// Notices belong to the action that raised them; a fresh open starts clean.
+    func panelOpened() {
+        notice = nil
+        lastError = nil
+        hooksInstalled = Self.checkHooksInstalled()
+    }
+
+    func show(error: String) {
+        notice = nil
+        lastError = error
+    }
+
+    private func show(notice text: String) {
+        lastError = nil
+        notice = text
+    }
+
+    func installHooks() {
+        do {
+            try HookInstaller.defaultInstaller(helperSource: helperSourceURL()).install()
+            hooksInstalled = true
+            show(notice: "Hooks installed. New Claude Code sessions will show up here.")
+        } catch {
+            show(error: "Couldn't install hooks: \(error)")
+        }
+    }
+
+    func uninstallHooks() {
+        do {
+            try HookInstaller.defaultInstaller(helperSource: helperSourceURL()).uninstall()
+            hooksInstalled = false
+            show(notice: "Hooks removed from ~/.claude/settings.json.")
+        } catch {
+            show(error: "Couldn't remove hooks: \(error)")
+        }
+    }
+
+    /// Adds `cwd` to the ignore list; the directory watcher then hides the session.
+    func ignore(_ cwd: String) {
+        let url = IgnoreList.defaultFileURL()
+        var text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        if !text.isEmpty, !text.hasSuffix("\n") { text += "\n" }
+        text += cwd + "\n"
+        do {
+            try text.write(to: url, atomically: true, encoding: .utf8)
+            show(notice: "Ignoring \((cwd as NSString).lastPathComponent). Undo in Ignored Projects….")
+        } catch {
+            show(error: "Couldn't update the ignore list: \(error.localizedDescription)")
+        }
+    }
+
+    func editIgnoredProjects() {
+        IgnoredProjectsEditor.show { [weak self] in self?.refresh() }
+    }
 
     /// Keep the floating panel's size in step with the live session count + settings.
     func updateFloatingSize() {
@@ -202,6 +260,7 @@ final class AppModel: ObservableObject {
         let usageBars = (UserDefaults.standard.bool(forKey: "showUsageBar") && usage != nil)
             ? 1 + ((usage?.sevenDayPercent != nil) ? 1 : 0) : 0
         floating.updateSize(shown: sel.shown.count, overflow: sel.overflow > 0, usageBars: usageBars)
+        floating.applyOpacity()
     }
 
     func refresh() {
@@ -234,24 +293,76 @@ final class AppModel: ObservableObject {
     }
 }
 
+// MARK: - Screenshots
+
+extension AppModel {
+    /// Development aid (CSB_RENDER=<path prefix>): writes the dropdown and the floating panel,
+    /// light and dark, with sample sessions to PNGs, then quits.
+    static func renderScreenshots(to prefix: String) {
+        let now = Date()
+        let sessions = [
+            SessionViewItem(id: "a", state: .red, cwd: "/Users/me/Projects/claude-status-bar", stateSince: now - 252),
+            SessionViewItem(id: "b", state: .yellow, cwd: "/Users/me/Projects/kor-cli", stateSince: now - 74),
+            SessionViewItem(id: "c", state: .yellow, cwd: "/Users/me/Projects/rs-metrics", stateSince: now - 9),
+            SessionViewItem(id: "d", state: .green, cwd: "/Users/me/Projects/korvpn", stateSince: now - 760),
+        ]
+        let usage = UsageSnapshot(updatedAt: now, fiveHourPercent: 38, fiveHourResetsAt: now + 17_820,
+                                  sevenDayPercent: 81, sevenDayResetsAt: now + 344_000)
+        let model = AppModel(preview: sessions, usage: usage)
+        let empty = AppModel(preview: [], usage: nil)
+        let defaults = UserDefaults(suiteName: "claude-status-bar-render")!
+        defaults.set(true, forKey: "showUsageBar")
+        defaults.set(3.0, forKey: "floatingMaxLights")
+
+        func write<V: View>(_ view: V, _ name: String, _ scheme: ColorScheme) {
+            let content = view
+                .environment(\.colorScheme, scheme)
+                .environment(\.isSnapshot, true)
+                .defaultAppStorage(defaults)
+                .padding(20)
+                .background(scheme == .dark ? Color(white: 0.12) : Color(white: 0.86))
+            let renderer = ImageRenderer(content: content)
+            renderer.scale = 2
+            if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                try? png.write(to: URL(fileURLWithPath: "\(prefix)-\(name)-\(scheme == .dark ? "dark" : "light").png"))
+            }
+        }
+        for scheme in [ColorScheme.light, .dark] {
+            write(PanelView(model: model), "panel", scheme)
+            write(PanelView(model: empty), "panel-empty", scheme)
+            write(FloatingLightsView(model: model), "floating", scheme)
+        }
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var model: AppModel?
+    private var statusItem: StatusItemController?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)  // menu-bar agent, no Dock icon
+        if let prefix = ProcessInfo.processInfo.environment["CSB_RENDER"] {
+            AppModel.renderScreenshots(to: prefix)
+            NSApp.terminate(nil)
+            return
+        }
+        let model = AppModel()
+        self.model = model
+        statusItem = StatusItemController(model: model)
     }
 }
 
 @main
 struct ClaudeStatusBarApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var model = AppModel()
 
+    // The menu bar item and its panel are AppKit's (StatusItemController). The SwiftUI app
+    // stays for its main menu: without the Edit menu, ⌘C and ⌘V fail in the editor. Not a
+    // Settings scene: on macOS 27 it opened an empty Settings window at every launch.
     var body: some Scene {
-        MenuBarExtra {
-            DropdownView(model: model)
-        } label: {
-            Image(nsImage: cachedMenuBarIcon(for: model.aggregate, dark: model.menuBarDark))
-        }
-        .menuBarExtraStyle(.window)
+        MenuBarExtra("Claude Status", isInserted: .constant(false)) { EmptyView() }
     }
 }
 
@@ -260,196 +371,4 @@ struct ClaudeStatusBarApp: App {
 func helperSourceURL() -> URL {
     let executable = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
     return executable.deletingLastPathComponent().appendingPathComponent("claude-statusbar-hook")
-}
-
-struct DropdownView: View {
-    @ObservedObject var model: AppModel
-    @AppStorage("notificationsEnabled") private var notificationsEnabled = true
-    @AppStorage("soundEnabled") private var soundEnabled = true
-    @AppStorage("panelOpacity") private var panelOpacity: Double = 0.4
-    @AppStorage("floatingMaxLights") private var floatingMaxLights: Double = 3
-    @AppStorage("appearanceMode") private var appearanceMode: AppearanceMode = .system
-    @AppStorage("showUsageBar") private var showUsageBar = false
-    @State private var startAtLogin = false   // read on appear, not in init (init runs per parent update)
-    @State private var ignoredProjects = ""
-    @State private var hookStatus = ""
-
-    private var version: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "dev"
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header("Sessions")
-            if model.sessions.isEmpty {
-                Text("No active sessions")
-                    .font(.system(size: 12)).foregroundStyle(.secondary)
-                    .padding(.vertical, 4)
-            } else {
-                // Only the elapsed labels tick (and only while the menu is open); the rows
-                // themselves re-render only when the session list changes.
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(model.sessions) { session in
-                            let color = Color(nsColor: lampNSColor(session.state))
-                            HStack(spacing: 9) {
-                                Circle()
-                                    .fill(color)
-                                    .frame(width: 8, height: 8)
-                                    .shadow(color: color.opacity(0.7), radius: 3)
-                                Text(session.displayName).font(.system(size: 13)).lineLimit(1)
-                                Spacer(minLength: 8)
-                                Text(formatElapsed(session.elapsed(at: context.date)))
-                                    .font(.system(size: 11, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 3)
-                        }
-                    }
-                }
-            }
-
-            divider
-            header("Options")
-            toggleRow("Notifications", isOn: $notificationsEnabled)
-            toggleRow("Sound", isOn: $soundEnabled)
-            // Force light/dark for both surfaces, or follow the system.
-            HStack(spacing: 8) {
-                Image(systemName: "circle.righthalf.filled")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                Picker("Appearance", selection: $appearanceMode) {
-                    ForEach(AppearanceMode.allCases, id: \.self) { Text($0.label).tag($0) }
-                }
-                .pickerStyle(.segmented).labelsHidden()
-            }
-            .padding(.vertical, 3)
-            .onChange(of: appearanceMode) { _, _ in model.applyAppearance() }
-            // Opacity dims both this menu and the floating window, so it's always available.
-            HStack(spacing: 8) {
-                Image(systemName: "circle.lefthalf.filled")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-                Slider(value: $panelOpacity, in: 0...1).controlSize(.mini)
-                Text("\(Int(panelOpacity * 100))%")
-                    .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-                    .frame(width: 32, alignment: .trailing)
-            }
-            .padding(.vertical, 3)
-            toggleRow("Floating lights", isOn: $model.showFloating)
-            if model.showFloating {
-                HStack(spacing: 8) {
-                    Image(systemName: "rectangle.grid.1x2")
-                        .font(.system(size: 11)).foregroundStyle(.secondary)
-                    Slider(value: $floatingMaxLights, in: 1...5, step: 1).controlSize(.mini)
-                    Text("\(Int(floatingMaxLights)) max")
-                        .font(.system(size: 10, design: .monospaced)).foregroundStyle(.secondary)
-                        .frame(width: 44, alignment: .trailing)
-                }
-                .padding(.vertical, 3)
-                toggleRow("5h usage bar", isOn: $showUsageBar)
-                if showUsageBar && model.usage == nil {
-                    Text("waiting for a statusline snapshot — see README")
-                        .font(.system(size: 10)).foregroundStyle(.tertiary)
-                        .padding(.leading, 2).padding(.bottom, 2)
-                }
-            }
-            toggleRow("Start at login", isOn: $startAtLogin)
-                .onChange(of: startAtLogin) { _, on in
-                    guard on != (SMAppService.mainApp.status == .enabled) else { return }   // synced on appear
-                    do {
-                        if on { try SMAppService.mainApp.register() }
-                        else { try SMAppService.mainApp.unregister() }
-                    } catch { startAtLogin = !on }
-                }
-
-            if let u = model.usage {
-                divider
-                header("Usage")
-                VStack(alignment: .leading, spacing: 7) {
-                    UsageBar(label: "5H USAGE", percent: u.fiveHourPercent ?? 0,
-                             resetsAt: u.fiveHourResetsAt, updatedAt: u.updatedAt)
-                    if let wk = u.sevenDayPercent {
-                        UsageBar(label: "WEEKLY", percent: wk,
-                                 resetsAt: u.sevenDayResetsAt, updatedAt: u.updatedAt)
-                    }
-                }
-                .padding(.bottom, 2)
-            }
-
-            divider
-            header("Ignored projects")
-            TextEditor(text: $ignoredProjects)
-                .font(.system(size: 11, design: .monospaced))
-                .scrollContentBackground(.hidden)
-                .frame(height: 38)
-                .padding(6)
-                .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-                .onChange(of: ignoredProjects) { _, new in
-                    try? new.write(to: IgnoreList.defaultFileURL(), atomically: true, encoding: .utf8)
-                }
-
-            divider
-            HStack(spacing: 8) {
-                Button("Install hooks") { runInstall() }
-                Button("Uninstall") { runUninstall() }
-                Spacer()
-                if !hookStatus.isEmpty {
-                    Text(hookStatus).font(.system(size: 10)).foregroundStyle(.secondary)
-                }
-            }
-            .padding(.vertical, 2)
-
-            divider
-            HStack {
-                Text("v\(version)").font(.system(size: 11)).foregroundStyle(.tertiary)
-                Spacer()
-                Button("Quit") { NSApplication.shared.terminate(nil) }
-                    .keyboardShortcut("q")
-            }
-        }
-        .padding(12)
-        .frame(width: 296)
-        .background {
-            ZStack {
-                VisualEffectView(material: .menu)
-                Color.panelTint.opacity(panelOpacity * 0.7)   // same slider as the floating window
-            }
-        }
-        .background(WindowAppearance(appearance: appearanceMode.nsAppearance))   // force light/dark on this menu
-        .onAppear {
-            startAtLogin = SMAppService.mainApp.status == .enabled
-            ignoredProjects = (try? String(contentsOf: IgnoreList.defaultFileURL(), encoding: .utf8)) ?? ""
-        }
-    }
-
-    private var divider: some View { Divider().padding(.vertical, 6) }
-
-    private func header(_ title: String) -> some View {
-        Text(title.uppercased())
-            .font(.system(size: 10, weight: .semibold)).kerning(0.6)
-            .foregroundStyle(.secondary)
-            .padding(.top, 2).padding(.bottom, 4)
-    }
-
-    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
-        HStack {
-            Text(title).font(.system(size: 13))
-            Spacer()
-            Toggle("", isOn: isOn).labelsHidden().toggleStyle(.switch).controlSize(.small)
-        }
-        .padding(.vertical, 3)
-    }
-
-    private func runInstall() {
-        do {
-            try HookInstaller.defaultInstaller(helperSource: helperSourceURL()).install()
-            hookStatus = "Installed."
-        } catch { hookStatus = "Failed: \(error)" }
-    }
-
-    private func runUninstall() {
-        do {
-            try HookInstaller.defaultInstaller(helperSource: helperSourceURL()).uninstall()
-            hookStatus = "Removed."
-        } catch { hookStatus = "Failed: \(error)" }
-    }
 }
