@@ -120,6 +120,10 @@ struct PanelCloseButton: View {
 /// The floating panel's content: up to five traffic-lights worst-first, then a +N chip.
 struct FloatingLightsView: View {
     @ObservedObject var model: AppModel
+    /// The panel this view sits in; nil when rendered for screenshots.
+    var window: @MainActor () -> NSWindow? = { nil }
+    /// Mouse and window origin when the current drag began, in screen coordinates.
+    @State private var dragStart: (mouse: NSPoint, origin: NSPoint)?
     // How many lights to show before collapsing the rest into the +N chip (1–5).
     @AppStorage("floatingMaxLights") private var floatingMaxLights: Double = 3
     // Show the usage bars at the bottom (only when a usage snapshot exists).
@@ -184,6 +188,22 @@ struct FloatingLightsView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(.primary.opacity(0.12), lineWidth: 1))
+        // isMovableByWindowBackground ignores SwiftUI content, so drags move the window here.
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .gesture(DragGesture(minimumDistance: 1)
+            .onChanged { moveWindowWithMouse(movedSoFar: $0.translation) }
+            .onEnded { _ in dragStart = nil })
+    }
+
+    /// The gesture reports late, so `movedSoFar` backdates the start to the mouse-down point.
+    private func moveWindowWithMouse(movedSoFar: CGSize) {
+        guard let window = window() else { return }
+        let mouse = NSEvent.mouseLocation
+        let start = dragStart ?? (NSPoint(x: mouse.x - movedSoFar.width, y: mouse.y + movedSoFar.height),
+                                  window.frame.origin)
+        dragStart = start
+        window.setFrameOrigin(NSPoint(x: start.origin.x + mouse.x - start.mouse.x,
+                                      y: start.origin.y + mouse.y - start.mouse.y))
     }
 }
 
@@ -196,7 +216,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     func show(model: AppModel) {
         if panel == nil {
-            let hosting = NSHostingView(rootView: FloatingLightsView(model: model))
+            let hosting = NSHostingView(rootView: FloatingLightsView(model: model, window: { [weak self] in self?.panel }))
             let sel = FloatingSelection.select(model.sessions, max: floatingMaxLights())
             let bars = usageBars(model)
             let w = FloatingLayout.windowWidth(shown: sel.shown.count, overflow: sel.overflow > 0, showUsage: bars > 0)
@@ -212,7 +232,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             p.isOpaque = false
             p.backgroundColor = .clear
             p.hasShadow = true
-            p.isMovableByWindowBackground = true
             p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             p.contentView = hosting
             p.delegate = self
