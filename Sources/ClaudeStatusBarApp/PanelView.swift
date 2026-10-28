@@ -92,7 +92,7 @@ private struct Header: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            KorMark().frame(width: 26, height: 26)
+            AppMark().frame(width: 26, height: 26)
             VStack(alignment: .leading, spacing: 0) {
                 Text("Claude Status").font(.system(size: 14, weight: .semibold))
                 Text(subtitle).font(.system(size: 11.5)).foregroundStyle(.secondary)

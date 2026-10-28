@@ -132,7 +132,7 @@ struct FloatingLightsView: View {
             shown: selection.shown.count, overflow: selection.overflow > 0, showUsage: usageVisible)
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
-                KorMark(cornerRadius: 3.5, inset: 3).frame(width: 15, height: 15)
+                AppMark().frame(width: 15, height: 15)
                 Text("Claude Code").font(.system(size: 11, weight: .semibold))
                 Spacer()
                 if !model.sessions.isEmpty {

@@ -63,30 +63,29 @@ extension EnvironmentValues {
     }
 }
 
-/// The KOR logo mark, drawn from the brand's 40×40 path.
-struct KorMark: View {
-    var cornerRadius: CGFloat = 7
-    var inset: CGFloat = 6
-
+/// The app's mark: its icon in miniature, a lit traffic light on a dark squircle.
+struct AppMark: View {
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: cornerRadius).fill(Color.korDeep)
-            KorGlyph().fill(.white).padding(inset)
+        GeometryReader { g in
+            let s = min(g.size.width, g.size.height)
+            let lamp = s * 0.2
+            ZStack {
+                RoundedRectangle(cornerRadius: s * 0.2237, style: .continuous)
+                    .fill(LinearGradient(colors: [Color(red: 0.18, green: 0.19, blue: 0.23),
+                                                  Color(red: 0.06, green: 0.07, blue: 0.09)],
+                                         startPoint: .top, endPoint: .bottom))
+                RoundedRectangle(cornerRadius: s * 0.14, style: .continuous)
+                    .fill(Color(red: 0.02, green: 0.02, blue: 0.03))
+                    .frame(width: s * 0.42, height: s * 0.8)
+                VStack(spacing: s * 0.035) {
+                    ForEach([SessionState.red, .yellow, .green], id: \.self) { state in
+                        Circle().fill(Color(nsColor: state.lampNSColor)).frame(width: lamp, height: lamp)
+                    }
+                }
+            }
+            .frame(width: s, height: s)
         }
-    }
-}
-
-private struct KorGlyph: Shape {
-    func path(in rect: CGRect) -> Path {
-        let s = min(rect.width, rect.height) / 40
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + x * s, y: rect.minY + y * s) }
-        var path = Path()
-        path.move(to: p(0, 0)); path.addLine(to: p(13.9, 0)); path.addLine(to: p(13.9, 7.6))
-        path.addLine(to: p(37.3, 7.6)); path.addLine(to: p(25.9, 19.6)); path.addLine(to: p(40, 40))
-        path.addLine(to: p(26, 40)); path.addLine(to: p(13.9, 27.5)); path.addLine(to: p(13.9, 40))
-        path.addLine(to: p(0, 40)); path.addLine(to: p(0, 26.9)); path.addLine(to: p(13.9, 26.9))
-        path.addLine(to: p(13.9, 9.4)); path.addLine(to: p(0, 9.4)); path.closeSubpath()
-        return path
+        .aspectRatio(1, contentMode: .fit)
     }
 }
 

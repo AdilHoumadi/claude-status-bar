@@ -45,7 +45,7 @@ private struct IgnoredProjectsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                KorMark().frame(width: 22, height: 22)
+                AppMark().frame(width: 22, height: 22)
                 Text("Ignored Projects").font(.system(size: 14, weight: .semibold))
             }
             VStack(alignment: .leading, spacing: 4) {
